@@ -45,7 +45,7 @@ button:hover{background:var(--bg2)}
 .persist-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:.75rem}
 .persist-title{font-size:15px;font-weight:600}
 .persist-sub{font-size:11px;color:var(--text2);margin-top:3px;line-height:1.45}
-.persist-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:.75rem}
+.persist-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:.75rem}
 .persist-card{padding:10px 14px;border-radius:var(--rl);border:.5px solid var(--border);background:var(--bg2);min-height:78px}
 .persist-card-name{font-size:10px;font-weight:500;color:var(--text2);margin-bottom:5px}
 .persist-card-val{font-size:18px;font-weight:600;line-height:1.2}
@@ -170,22 +170,17 @@ th.hist-col{background:rgba(232,150,10,.06);border-left:.5px dashed var(--border
       <div class="persist-card-val" id="persist-avg">—</div>
       <div class="persist-card-note" id="persist-avg-note">等待資料</div>
     </div>
-    <div class="persist-card" id="persist-score-card">
-      <div class="persist-card-name">Persistence Score</div>
-      <div class="persist-card-val" id="persist-score">—</div>
-      <div class="persist-card-note" id="persist-score-note">≥70%=100、60~70%=80…</div>
-    </div>
-    <div class="persist-card" id="persist-signal-card">
-      <div class="persist-card-name">強勢股狀態</div>
-      <div class="persist-card-val" id="persist-signal">—</div>
-      <div class="persist-card-note" id="persist-updated">資料尚未完成</div>
+    <div class="persist-card" id="persist-market-card">
+      <div class="persist-card-name">整體市場近一個月漲跌</div>
+      <div class="persist-card-val" id="persist-market-month">—</div>
+      <div class="persist-card-note" id="persist-market-note">等待資料</div>
     </div>
   </div>
   <div id="persist-loading" class="persist-loading"><span class="spin"></span> 正在讀取近30個交易日歷史資料...</div>
   <div id="persist-table-wrap" class="persist-table-wrap" style="display:none">
     <table class="persist-table">
       <thead><tr>
-        <th>起始日</th><th>10日後日期</th><th>Top20% 樣本</th><th>仍在 Top20%</th><th>延續率</th><th>Score</th>
+        <th>起始日</th><th>10日後日期</th><th>Top20% 樣本</th><th>仍在 Top20%</th><th>延續率</th>
       </tr></thead>
       <tbody id="persist-tbody"></tbody>
     </table>
@@ -772,21 +767,6 @@ function parseDayPriceMap(text) {
   return map;
 }
 
-function calcPersistenceScore(rate) {
-  if (!Number.isFinite(rate)) return null;
-  if (rate >= 70) return 100;
-  if (rate >= 60) return 80;
-  if (rate >= 50) return 60;
-  if (rate >= 40) return 40;
-  if (rate >= 30) return 20;
-  return 0;
-}
-
-function persistenceSignal(score) {
-  if (score === null) return { text: '—', cls: '' };
-  if (score >= 40) return { text: '趨勢', cls: 'persist-mid' };
-  return { text: '盤整', cls: 'persist-weak' };
-}
 
 async function collectTradingSnapshots(anchorDate, count) {
   const found = [];
@@ -844,12 +824,33 @@ async function calculatePersistence(anchorDate) {
       futureDate: futureSnap.date,
       sample: top20Start.size,
       remain,
-      rate,
-      score: calcPersistenceScore(rate)
+      rate
     });
   }
   rows.sort((a, b) => a.startDate - b.startDate);
-  return { rows, latestAvailable: latestArr[latestArr.length - 1].date, snapshotCount: latestArr.length };
+  return { rows, latestAvailable: latestArr[latestArr.length - 1].date, snapshotCount: latestArr.length, snapshots: latestArr };
+}
+
+function calcMarketOneMonthChange(snapshots) {
+  if (!Array.isArray(snapshots) || snapshots.length < 21) return null;
+  const latest = snapshots[snapshots.length - 1];
+  const prior = snapshots[snapshots.length - 21];
+  if (!latest || !prior) return null;
+
+  // 每個快照的 parseDayPriceMap 已先以「日期＋股票代號」去重；
+  // 這裡只對兩個日期都存在的股票計算近一個月（20個交易日）報酬。
+  let sum = 0;
+  let count = 0;
+  for (const [code, cur] of latest.prices.entries()) {
+    const old = prior.prices.get(code);
+    if (!old || old.price <= 0 || cur.price <= 0) continue;
+    const ret = (cur.price / old.price - 1) * 100;
+    if (!Number.isFinite(ret)) continue;
+    sum += ret;
+    count++;
+  }
+  if (!count) return null;
+  return { avgReturn: sum / count, count, startDate: prior.date, endDate: latest.date };
 }
 
 function renderPersistence(result, forceStatus) {
@@ -864,9 +865,8 @@ function renderPersistence(result, forceStatus) {
     wrap.style.display = 'none';
     document.getElementById('persist-latest').textContent = '—';
     document.getElementById('persist-avg').textContent = '—';
-    document.getElementById('persist-score').textContent = '—';
-    document.getElementById('persist-signal').textContent = '資料不足';
-    document.getElementById('persist-updated').textContent = '至少需要' + PERSIST_SNAPSHOT_NEED + '個有效交易日分頁';
+    document.getElementById('persist-market-month').textContent = '—';
+    document.getElementById('persist-market-note').textContent = '至少需要21個有效交易日分頁';
     note.textContent = '目前可讀取的歷史快照不足以完成「10日報酬＋10日後持續Top20%」的近10期觀測。';
     return;
   }
@@ -880,37 +880,29 @@ function renderPersistence(result, forceStatus) {
       '<td>' + r.sample + '</td>' +
       '<td>' + r.remain + '</td>' +
       '<td class="persist-rate">' + rateText + '</td>' +
-      '<td>' + (r.score === null ? '—' : r.score) + '</td>' +
       '</tr>';
   }).join('');
 
   const rates = result.rows.map(r => r.rate).filter(Number.isFinite);
   const latest = result.rows[result.rows.length - 1];
   const avg = rates.length ? rates.reduce((a,b) => a+b, 0) / rates.length : null;
-  const score = calcPersistenceScore(avg);
-  const signal = persistenceSignal(score);
+  const marketMonth = calcMarketOneMonthChange(result.snapshots);
 
   document.getElementById('persist-latest').textContent = latest.rate === null ? '—' : latest.rate.toFixed(1) + '%';
   document.getElementById('persist-latest-note').textContent = latest.startDate ? (fmtDateObj(latest.startDate) + ' → ' + fmtDateObj(latest.futureDate) + '，' + latest.remain + '/' + latest.sample + ' 留存') : '';
   document.getElementById('persist-avg').textContent = avg === null ? '—' : avg.toFixed(1) + '%';
   document.getElementById('persist-avg-note').textContent = '取最近 ' + rates.length + ' 期完成觀測的平均';
-  document.getElementById('persist-score').textContent = score === null ? '—' : score + '/100';
-  document.getElementById('persist-score-note').textContent = avg === null ? '等待資料' : '以近10期平均延續率換算';
-  document.getElementById('persist-signal').textContent = signal.text;
-  document.getElementById('persist-updated').textContent = result.latestAvailable ? ('最新歷史分頁：' + fmtDateObj(result.latestAvailable)) : '';
+  document.getElementById('persist-market-month').textContent = marketMonth === null ? '—' : (marketMonth.avgReturn >= 0 ? '+' : '') + marketMonth.avgReturn.toFixed(2) + '%';
+  document.getElementById('persist-market-note').textContent = marketMonth === null ? '等待資料' : (fmtDateObj(marketMonth.startDate) + ' → ' + fmtDateObj(marketMonth.endDate) + '，' + marketMonth.count + ' 檔去重股票平均');
 
-  const cards = ['persist-latest-card','persist-avg-card','persist-score-card','persist-signal-card'];
+  const cards = ['persist-latest-card','persist-avg-card','persist-market-card'];
   cards.forEach(id => {
     const el = document.getElementById(id);
     if (el) el.classList.remove('persist-good','persist-mid','persist-weak');
   });
   if (latest.rate !== null) document.getElementById('persist-latest-card').classList.add(latest.rate >= 60 ? 'persist-good' : latest.rate >= 40 ? 'persist-mid' : 'persist-weak');
   if (avg !== null) document.getElementById('persist-avg-card').classList.add(avg >= 60 ? 'persist-good' : avg >= 40 ? 'persist-mid' : 'persist-weak');
-  if (score !== null) {
-    const cls = score >= 80 ? 'persist-good' : score >= 40 ? 'persist-mid' : 'persist-weak';
-    document.getElementById('persist-score-card').classList.add(cls);
-    document.getElementById('persist-signal-card').classList.add(cls);
-  }
+  if (marketMonth !== null) document.getElementById('persist-market-card').classList.add(marketMonth.avgReturn > 0 ? 'persist-good' : marketMonth.avgReturn < 0 ? 'persist-weak' : 'persist-mid');
 
   note.textContent = '算法：先以「日期＋股票代號」去重；每一期計算 10 日報酬並取前 20%，再與 10 個交易日後的 Top20% 做集合交集。近10期則以最近10個「已可完成 t+10 驗證」的起始日計算。' +
     (forceStatus ? '　剛剛完成手動更新。' : '　頁面會定期自動檢查最新日期分頁。');
