@@ -840,6 +840,9 @@ async function calculatePersistence(anchorDate, progress) {
   }
 
   const rows = [];
+  // 市場近月漲幅固定以「最新可用交易日」為基準，
+  // 不再隨著 Top20% 各列的起始日改變。
+  const latestMarketMonth = calcMarketOneMonthChange(latestArr, latestArr.length - 1);
   const startFirst = snapshotNeed - PERSIST_HOLD_DAYS - PERSIST_LOOKBACK_DAYS;
   const startLast = snapshotNeed - PERSIST_HOLD_DAYS - 1;
   for (let i = startFirst; i <= startLast; i++) {
@@ -851,13 +854,14 @@ async function calculatePersistence(anchorDate, progress) {
     let remain = 0;
     top20Start.forEach(code => { if (top20Future.has(code)) remain++; });
     const rate = top20Start.size ? remain / top20Start.size * 100 : null;
-    const marketMonth = calcMarketOneMonthChange(latestArr, i);
+    // Top20% 每列只顯示該期延續率；「市場近月漲跌」統一使用最新交易日的市場基準。
+    const marketMonth = latestMarketMonth;
     rows.push({ startDate: startSnap.date, futureDate: futureSnap.date, sample: top20Start.size, remain, rate, marketMonth });
     if (progress) progress({ kind:'compute', done:i-startFirst+1, total:startLast-startFirst+1, date:startSnap.date, stage:'計算 Top20 延續' });
     if ((i - startFirst) % 2 === 0) await yieldToUI();
   }
   rows.sort((a, b) => a.startDate - b.startDate);
-  const currentMarketMonth = calcMarketOneMonthChange(latestArr, latestArr.length - 1);
+  const currentMarketMonth = latestMarketMonth;
   return { rows, latestAvailable: latestArr[latestArr.length - 1].date, snapshotCount: latestArr.length, snapshots: latestArr, currentMarketMonth };
 }
 
@@ -936,8 +940,7 @@ function renderPersistence(result, forceStatus) {
   const rates = result.rows.map(r => r.rate).filter(Number.isFinite);
   const latest = result.rows[result.rows.length - 1];
   const avg = rates.length ? rates.reduce((a,b) => a+b, 0) / rates.length : null;
-  // 這張卡顯示「最新有效交易日」的近一個月市場漲跌；
-  // Top20 表格中的各列仍保留各自起始日的市場近月漲跌。
+  // 這張卡與 Top20 表格皆顯示「最新有效交易日」的近一個月市場漲跌。
   const marketMonth = result.currentMarketMonth || null;
   MARKET_MONTH_RETURN = marketMonth ? marketMonth.avgReturn : null;
 
@@ -971,7 +974,7 @@ function renderPersistence(result, forceStatus) {
   if (marketMonth !== null) document.getElementById('persist-market-card').classList.add(marketMonth.avgReturn > 0 ? 'persist-good' : marketMonth.avgReturn < 0 ? 'persist-weak' : 'persist-mid');
 
   render();
-  note.textContent = '算法：先以「日期＋股票代號」去重；每一期計算 10 日報酬並取前 20%，再與 10 個交易日後的 Top20% 做集合交集。近10期則以最近10個「已可完成 t+10 驗證」的起始日計算；「市場近月漲跌」則以各起始日往前20個交易日，計算去重股票平均漲跌。' +
+  note.textContent = '算法：先以「日期＋股票代號」去重；每一期計算 10 日報酬並取前 20%，再與 10 個交易日後的 Top20% 做集合交集。近10期則以最近10個「已可完成 t+10 驗證」的起始日計算；「市場近月漲跌」固定以最新可用交易日的全部去重股票，計算相對20個交易日前的平均漲跌。' +
     (forceStatus ? '　剛剛完成手動更新。' : '　頁面會定期自動檢查最新日期分頁。');
 }
 
