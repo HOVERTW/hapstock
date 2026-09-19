@@ -888,6 +888,28 @@ async function calcLatestMarketMonthFromStockCSV() {
   }
 }
 
+function calcSnapshotMarketMonthChange(snapshot) {
+  if (!snapshot || !snapshot.prices) return null;
+  const monthReturns = snapshot.monthReturns instanceof Map ? snapshot.monthReturns : new Map();
+  let sum = 0;
+  let validCount = 0;
+  for (const code of snapshot.prices.keys()) {
+    const ret = monthReturns.get(code);
+    if (!Number.isFinite(ret)) continue;
+    sum += ret;
+    validCount++;
+  }
+  if (!validCount) return null;
+  return {
+    avgReturn: sum / validCount,
+    count: snapshot.prices.size,
+    validCount,
+    startDate: null,
+    endDate: snapshot.date,
+    source: 'snapshot-month-return'
+  };
+}
+
 async function calculatePersistence(anchorDate, progress) {
   const snapshotNeed = PERSIST_SNAPSHOT_NEED;
   const latestArr = await collectTradingSnapshots(anchorDate, snapshotNeed, (done, total, d, stage) => {
@@ -898,10 +920,6 @@ async function calculatePersistence(anchorDate, progress) {
   }
 
   const rows = [];
-  // 市場近月漲幅固定以「最新日期股票表」為基準，
-  // 直接平均最新日期全部去重股票的「近一個月漲幅」，與頁面整體市場數字保持一致。
-  // 若最新股票表暫時讀不到，才退回歷史快照計算。
-  const latestMarketMonth = (await calcLatestMarketMonthFromStockCSV()) || calcMarketOneMonthChange(latestArr, latestArr.length - 1);
   const startFirst = snapshotNeed - PERSIST_HOLD_DAYS - PERSIST_LOOKBACK_DAYS;
   const startLast = snapshotNeed - PERSIST_HOLD_DAYS - 1;
   for (let i = startFirst; i <= startLast; i++) {
@@ -913,14 +931,15 @@ async function calculatePersistence(anchorDate, progress) {
     let remain = 0;
     top20Start.forEach(code => { if (top20Future.has(code)) remain++; });
     const rate = top20Start.size ? remain / top20Start.size * 100 : null;
-    // Top20% 每列只顯示該期延續率；「市場近月漲跌」統一使用最新交易日的市場基準。
-    const marketMonth = latestMarketMonth;
+    // 每一列的市場近月漲跌，以右側「10日後日期」為準，
+    // 使用該日期全部去重股票的「近一個月漲幅」平均，不共用最新日期的數值。
+    const marketMonth = calcSnapshotMarketMonthChange(futureSnap);
     rows.push({ startDate: startSnap.date, futureDate: futureSnap.date, sample: top20Start.size, remain, rate, marketMonth });
     if (progress) progress({ kind:'compute', done:i-startFirst+1, total:startLast-startFirst+1, date:startSnap.date, stage:'計算 Top20 延續' });
     if ((i - startFirst) % 2 === 0) await yieldToUI();
   }
   rows.sort((a, b) => a.startDate - b.startDate);
-  const currentMarketMonth = latestMarketMonth;
+  const currentMarketMonth = calcSnapshotMarketMonthChange(latestArr[latestArr.length - 1]);
   return { rows, latestAvailable: latestArr[latestArr.length - 1].date, snapshotCount: latestArr.length, snapshots: latestArr, currentMarketMonth };
 }
 
@@ -1049,7 +1068,7 @@ function renderPersistence(result, forceStatus) {
   if (marketMonth !== null) document.getElementById('persist-market-card').classList.add(marketMonth.avgReturn > 0 ? 'persist-good' : marketMonth.avgReturn < 0 ? 'persist-weak' : 'persist-mid');
 
   render();
-  note.textContent = '算法：先以「日期＋股票代號」去重；每一期計算 10 日報酬並取前 20%，再與 10 個交易日後的 Top20% 做集合交集。近10期則以最近10個「已可完成 t+10 驗證」的起始日計算；「市場近月漲跌」固定以最新日期股票表的全部去重股票，直接平均該日資料中的「近一個月漲幅」；最新股票表無法取得時，才退回歷史快照計算。' +
+  note.textContent = '算法：先以「日期＋股票代號」去重；每一期計算 10 日報酬並取前 20%，再與 10 個交易日後的 Top20% 做集合交集。近10期則以最近10個「已可完成 t+10 驗證」的起始日計算；「市場近月漲跌」以每一列右側的10日後日期為準，平均該日期全部去重股票的「近一個月漲幅」。' +
     (forceStatus ? '　剛剛完成手動更新。' : '　頁面會定期自動檢查最新日期分頁。');
 }
 
