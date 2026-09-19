@@ -130,7 +130,6 @@ th.hist-col{background:rgba(232,150,10,.06);border-left:.5px dashed var(--border
     <div class="sub" id="sub"><span class="spin"></span>載入中...</div>
   </div>
   <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-    <label class="persist-btn" style="cursor:pointer">📂 匯入 Excel<input id="excel-file-input" type="file" accept=".xlsx,.xls" onchange="importExcelFile(this.files[0])" style="display:none"></label>
     <button onclick="reloadAll()">&#8635; 重新整理</button>
   </div>
 </div>
@@ -539,15 +538,6 @@ async function loadExcelData(force = false) {
   finally { EXCEL_LOADING=false; }
 }
 
-async function importExcelFile(file) {
-  if(!file)return;
-  const loading=document.getElementById('stock-loading'); loading.style.display='block'; loading.textContent='正在讀取 Excel：'+file.name; document.getElementById('tw').style.display='none';
-  try{
-    EXCEL_DATA=buildExcelDataset(await file.arrayBuffer(),'本機：'+file.name); if(!EXCEL_DATA.snapshots.length)throw new Error('找不到可用的日期／股票資料'); EXCEL_DATA.loadedAt=Date.now();
-    BASE_DATE=null;BASE_LABEL='';compareMode='none';HIST=null;const cs=document.getElementById('cmp-select');if(cs)cs.value='0';const st=document.getElementById('cmp-status');if(st)st.textContent='';
-    processSnapshot(EXCEL_DATA.snapshots[EXCEL_DATA.snapshots.length-1]); await loadPersistence(true);
-  }catch(e){loading.style.display='block';loading.textContent='Excel 讀取失敗：'+(e&&e.message?e.message:e);}
-}
 function processSnapshot(snapshot){if(!snapshot)throw new Error('找不到指定交易日資料');processStockRecords(snapshot.records,snapshot.date);}
 function getSnapshotAtOrBefore(target){if(!EXCEL_DATA.snapshots.length)return null;const t=target instanceof Date?target.getTime():new Date(target).getTime();let best=EXCEL_DATA.snapshots[0];for(const snap of EXCEL_DATA.snapshots){if(snap.date.getTime()<=t)best=snap;else break;}return best;}
 function snapshotToCSV(snapshot){
@@ -556,7 +546,7 @@ function snapshotToCSV(snapshot){
   for(const r of snapshot.records)rows.push([fmtDateObj(snapshot.date),r.marketStatus||'',r.marketMonthRaw||(market?((market.avgReturn>=0?'+':'')+market.avgReturn.toFixed(2)+'%'):''),r.stockClass||'',r.name,r.code,r.sector,r.newsHeatRaw,r.newsHeatScoreOriginal||r.newsHeatScore||'',r.price,r.fund,r.tech,r.total||'',r.scoreModeOriginal||r.scoreMode||'',r.kline,r.group,r.pe,r.pe5y,r.price_chg_raw!==undefined?r.price_chg_raw:'',r.news_up,r.news_cap]);
   return rows.map(row=>row.map(esc).join(',')).join('\n');
 }
-async function loadStocks(force=false){const loading=document.getElementById('stock-loading');loading.style.display='block';document.getElementById('tw').style.display='none';try{const data=await loadExcelData(force);const target=BASE_DATE?new Date(BASE_DATE):data.snapshots[data.snapshots.length-1].date;processSnapshot(getSnapshotAtOrBefore(target));}catch(e){loading.textContent='載入 Excel 失敗：'+(e&&e.message?e.message:e)+'。可按「匯入 Excel」載入本機檔。';}}
+async function loadStocks(force=false){const loading=document.getElementById('stock-loading');loading.style.display='block';document.getElementById('tw').style.display='none';try{const data=await loadExcelData(force);const target=BASE_DATE?new Date(BASE_DATE):data.snapshots[data.snapshots.length-1].date;processSnapshot(getSnapshotAtOrBefore(target));}catch(e){loading.textContent='載入 Excel 失敗：'+(e&&e.message?e.message:e)+'。請稍後重新整理。';}}
 
 // ── 回測模式：以歷史某天為基準 ──
 async function fetchSheetByDate(baseDate) {
@@ -1036,7 +1026,7 @@ async function runExportExcel(){
 async function reloadAll() {
   loadMkt();
   try { await loadExcelData(true); await loadStocks(false); await loadPersistence(true); }
-  catch(e){const el=document.getElementById('stock-loading');if(el){el.style.display='block';el.textContent='Excel 更新失敗：'+(e&&e.message?e.message:e)+'；可用「匯入 Excel」載入本機檔。';}}
+  catch(e){const el=document.getElementById('stock-loading');if(el){el.style.display='block';el.textContent='Excel 更新失敗：'+(e&&e.message?e.message:e)+'；請稍後重新整理。';}}
 }
 
 // 每15分鐘檢查一次 Excel；只重新抓整本 Excel，不再逐頁請求歷史資料。// 每15分鐘檢查一次最新日期分頁；新增日期分頁後，下一次檢查即會自動納入。
