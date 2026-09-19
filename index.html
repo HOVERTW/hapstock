@@ -796,18 +796,22 @@ function persistenceSignal(rate) {
   return { text: '盤整', cls: 'persist-weak' };
 }
 
-async function collectTradingSnapshots(anchorDate, count) {
+async function collectTradingSnapshots(anchorDate, count, progress) {
   const found = [];
   const cursor = new Date(anchorDate);
-  // 30 個交易日需要跨過週末、台股假期與偶發缺頁，因此給足日曆緩衝。
   for (let extra = 0; extra < 70 && found.length < count; extra++) {
     const d = new Date(cursor);
     d.setDate(cursor.getDate() - extra);
+    const dow = d.getDay();
+    if (dow === 0 || dow === 6) continue;
+    if (progress) progress(found.length, count, d, '讀取歷史快照');
     const got = await fetchSheetForDate(d);
     if (!got) continue;
     const prices = parseDayPriceMap(got.text);
     if (!prices.size) continue;
     found.push({ date: d, sheetName: got.sheetName, prices });
+    if (progress) progress(found.length, count, d, '歷史快照完成');
+    if (found.length % 3 === 0) await yieldToUI();
   }
   found.sort((a, b) => a.date - b.date);
   return found;
@@ -826,18 +830,16 @@ function top20ByReturn(startSnap, priorSnap) {
   return new Set(vals.slice(0, k).map(x => x.code));
 }
 
-async function calculatePersistence(anchorDate) {
-  // 每一期需要 t-20、t、t+10；近10個已完成觀測因此需要40個交易日快照。
-  // 每個起始日同時可計算前20個交易日的整體市場平均漲跌。
+async function calculatePersistence(anchorDate, progress) {
   const snapshotNeed = PERSIST_SNAPSHOT_NEED;
-  const latestArr = await collectTradingSnapshots(anchorDate, snapshotNeed);
+  const latestArr = await collectTradingSnapshots(anchorDate, snapshotNeed, (done, total, d, stage) => {
+    if (progress) progress({ kind:'snapshot', done, total, date:d, stage });
+  });
   if (latestArr.length < snapshotNeed) {
     return { rows: [], latestAvailable: latestArr.length ? latestArr[latestArr.length - 1].date : null, snapshotCount: latestArr.length };
   }
 
   const rows = [];
-  // snapshots 已按日期由舊到新排序；最後 10 個「可完成 t+10」的起始日，
-  // 其索引應落在最新10個 t+10 觀測之前，而前方還要保留20個交易日供市場近月漲跌計算。
   const startFirst = snapshotNeed - PERSIST_HOLD_DAYS - PERSIST_LOOKBACK_DAYS;
   const startLast = snapshotNeed - PERSIST_HOLD_DAYS - 1;
   for (let i = startFirst; i <= startLast; i++) {
@@ -850,18 +852,11 @@ async function calculatePersistence(anchorDate) {
     top20Start.forEach(code => { if (top20Future.has(code)) remain++; });
     const rate = top20Start.size ? remain / top20Start.size * 100 : null;
     const marketMonth = calcMarketOneMonthChange(latestArr, i);
-    rows.push({
-      startDate: startSnap.date,
-      futureDate: futureSnap.date,
-      sample: top20Start.size,
-      remain,
-      rate,
-      marketMonth
-    });
+    rows.push({ startDate: startSnap.date, futureDate: futureSnap.date, sample: top20Start.size, remain, rate, marketMonth });
+    if (progress) progress({ kind:'compute', done:i-startFirst+1, total:startLast-startFirst+1, date:startSnap.date, stage:'計算 Top20 延續' });
+    if ((i - startFirst) % 2 === 0) await yieldToUI();
   }
   rows.sort((a, b) => a.startDate - b.startDate);
-  // 市場卡片與總分判斷必須使用「最新有效交易日」本身的近20交易日平均漲跌，
-  // 不應因 Top20 要等待 t+10 驗證，而退回到較早的起始日。
   const currentMarketMonth = calcMarketOneMonthChange(latestArr, latestArr.length - 1);
   return { rows, latestAvailable: latestArr[latestArr.length - 1].date, snapshotCount: latestArr.length, snapshots: latestArr, currentMarketMonth };
 }
@@ -1058,13 +1053,26 @@ window.addEventListener('resize', function() {
   document.querySelectorAll('.info-pop.show').forEach(x => x.classList.remove('show'));
 });
 
+let EXPORT_RUNNING = false;
+function yieldToUI(){ return new Promise(resolve => setTimeout(resolve, 0)); }
+function updateExportProgress(done,total,current,stage,detail){
+  const statusEl=document.getElementById('export-status');
+  const bar=document.getElementById('export-progress-bar');
+  const text=document.getElementById('export-progress-text');
+  const stageEl=document.getElementById('export-stage');
+  const pct=total ? Math.min(100, Math.round(done/total*100)) : 0;
+  if(bar) bar.style.width=pct+'%';
+  if(text) text.textContent=pct+'%　'+done+' / '+total+' 個交易日';
+  if(stageEl) stageEl.textContent=(current ? current+'　' : '')+(stage||'')+(detail ? '　'+detail : '');
+  if(statusEl) statusEl.textContent=stageEl ? stageEl.textContent : '';
+}
 function openExportDialog() {
   let dlg=document.getElementById('export-dialog');
-  if(!dlg){dlg=document.createElement('div');dlg.id='export-dialog';dlg.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';dlg.innerHTML=`<div style="width:min(460px,100%);background:var(--bg);color:var(--text);border-radius:14px;padding:20px;box-shadow:0 10px 40px rgba(0,0,0,.25)"><div style="font-size:17px;font-weight:700;margin-bottom:14px">匯出 Excel</div><div style="font-size:12px;color:var(--text2);margin-bottom:12px">匯出目前格式：個股新總分、股票類別、盤整／延續、市場近月漲跌，以及 Top20% 強勢股延續表。</div><div style="display:flex;gap:12px;margin-bottom:14px"><label><input type="radio" name="export-mode" value="single" checked onchange="toggleExportRange()"> 單天</label><label><input type="radio" name="export-mode" value="range" onchange="toggleExportRange()"> 日期範圍</label></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><label style="font-size:12px">日期<input id="export-start" type="date" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:7px;border:.5px solid var(--border2);border-radius:7px;background:var(--bg);color:var(--text)"></label><label id="export-end-wrap" style="font-size:12px;display:none">結束日期<input id="export-end" type="date" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:7px;border:.5px solid var(--border2);border-radius:7px;background:var(--bg);color:var(--text)"></label></div><div id="export-status" style="font-size:11px;color:var(--text2);min-height:18px;margin-top:10px"></div><div style="display:flex;justify-content:flex-end;gap:8px;margin-top:15px"><button onclick="closeExportDialog()" style="padding:7px 13px;border:1px solid var(--border2);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer">取消</button><button onclick="runExportExcel()" style="padding:7px 13px;border:0;border-radius:7px;background:#1d9e75;color:white;cursor:pointer">開始匯出</button></div></div>`;document.body.appendChild(dlg);const ds=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');const def=BASE_DATE||new Date();document.getElementById('export-start').value=ds(def);document.getElementById('export-end').value=ds(new Date());}
+  if(!dlg){dlg=document.createElement('div');dlg.id='export-dialog';dlg.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';dlg.innerHTML=`<div style="width:min(500px,100%);background:var(--bg);color:var(--text);border-radius:14px;padding:20px;box-shadow:0 10px 40px rgba(0,0,0,.25)"><div style="font-size:17px;font-weight:700;margin-bottom:14px">匯出 Excel</div><div style="font-size:12px;color:var(--text2);margin-bottom:12px">匯出目前格式：個股新總分、股票類別、盤整／延續、市場近月漲跌，以及 Top20% 強勢股延續表。</div><div style="display:flex;gap:12px;margin-bottom:14px"><label><input type="radio" name="export-mode" value="single" checked onchange="toggleExportRange()"> 單天</label><label><input type="radio" name="export-mode" value="range" onchange="toggleExportRange()"> 日期範圍</label></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><label style="font-size:12px">日期<input id="export-start" type="date" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:7px;border:.5px solid var(--border2);border-radius:7px;background:var(--bg);color:var(--text)"></label><label id="export-end-wrap" style="font-size:12px;display:none">結束日期<input id="export-end" type="date" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:7px;border:.5px solid var(--border2);border-radius:7px;background:var(--bg);color:var(--text)"></label></div><div id="export-progress-wrap" style="margin-top:14px;padding:11px 12px;border:1px solid var(--border2);border-radius:9px;background:rgba(127,127,127,.05);display:none"><div style="display:flex;justify-content:space-between;gap:10px;font-size:11px;color:var(--text2);margin-bottom:7px"><span id="export-progress-text">0%　0 / 0 個交易日</span><span id="export-stage">準備中…</span></div><div style="height:8px;background:var(--border);border-radius:99px;overflow:hidden"><div id="export-progress-bar" style="height:100%;width:0%;background:#1d9e75;transition:width .15s ease"></div></div><div id="export-progress-detail" style="font-size:10px;color:var(--text3);margin-top:7px"></div></div><div id="export-status" style="font-size:11px;color:var(--text2);min-height:18px;margin-top:10px"></div><div style="display:flex;justify-content:flex-end;gap:8px;margin-top:15px"><button id="export-cancel-btn" onclick="closeExportDialog()" style="padding:7px 13px;border:1px solid var(--border2);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer">取消</button><button id="export-start-btn" onclick="runExportExcel()" style="padding:7px 13px;border:0;border-radius:7px;background:#1d9e75;color:white;cursor:pointer">開始匯出</button></div></div>`;document.body.appendChild(dlg);const ds=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');const def=BASE_DATE||new Date();document.getElementById('export-start').value=ds(def);document.getElementById('export-end').value=ds(new Date());}
   dlg.style.display='flex';
 }
 function toggleExportRange(){const r=document.querySelector('input[name="export-mode"]:checked')?.value==='range';document.getElementById('export-end-wrap').style.display=r?'block':'none';}
-function closeExportDialog(){const d=document.getElementById('export-dialog');if(d)d.style.display='none';}
+function closeExportDialog(){if(EXPORT_RUNNING)return;const d=document.getElementById('export-dialog');if(d)d.style.display='none';}
 
 function parseStockCSVRows(text){
   const parsed=Papa.parse(text,{header:false,skipEmptyLines:true}), all=parsed.data||[]; if(all.length<2)return[];
@@ -1078,16 +1086,81 @@ function applyScoreToStocks(stocks,status,marketReturn){
 }
 
 async function runExportExcel(){
+  if(EXPORT_RUNNING)return;
   const mode=document.querySelector('input[name="export-mode"]:checked')?.value||'single',sv=document.getElementById('export-start').value,ev=document.getElementById('export-end').value,statusEl=document.getElementById('export-status');
-  if(!sv){statusEl.textContent='請選擇日期';return;}if(mode==='range'&&(!ev||ev<sv)){statusEl.textContent='結束日期必須大於或等於開始日期';return;}
-  const st=new Date(sv+'T12:00:00'),ed=new Date((mode==='single'?sv:ev)+'T12:00:00'),dates=[];for(let d=new Date(st);d<=ed;d.setDate(d.getDate()+1))if(d.getDay()!==0&&d.getDay()!==6)dates.push(new Date(d));if(dates.length>60){statusEl.textContent='一次最多匯出60個工作日';return;}
+  if(!sv){statusEl.textContent='請選擇日期';return;}
+  if(mode==='range'&&(!ev||ev<sv)){statusEl.textContent='結束日期必須大於或等於開始日期';return;}
+  const st=new Date(sv+'T12:00:00'),ed=new Date((mode==='single'?sv:ev)+'T12:00:00'),dates=[];
+  for(let d=new Date(st);d<=ed;d.setDate(d.getDate()+1)) if(d.getDay()!==0&&d.getDay()!==6) dates.push(new Date(d));
+  if(dates.length>60){statusEl.textContent='一次最多匯出60個工作日';return;}
+
+  EXPORT_RUNNING=true;
+  const wrap=document.getElementById('export-progress-wrap'),startBtn=document.getElementById('export-start-btn'),cancelBtn=document.getElementById('export-cancel-btn');
+  if(wrap)wrap.style.display='block';
+  if(startBtn){startBtn.disabled=true;startBtn.style.opacity='.55';startBtn.textContent='匯出中…';}
+  if(cancelBtn){cancelBtn.disabled=true;cancelBtn.style.opacity='.55';}
+  updateExportProgress(0,Math.max(1,dates.length),'','準備匯出','正在建立歷史資料快取，畫面會持續更新。');
+
   const saved={STOCKS,MARKET_STATUS,MARKET_MONTH_RETURN,TSMC_FUND,TSMC_TOTAL,BASE_DATE,BASE_LABEL,compareMode,HIST};
   try{
     const wb=XLSX.utils.book_new(),detail=[['日期','市場情況','市場近一個月漲跌','股票類別','名稱','代號','產業','新聞熱度','新聞熱度分數','股價','基本面分','技術籌碼分','新總分','評分模式','K線分','族群分','本益比','近5年平均PE','近1月漲跌%','漲價新聞','產能新聞']],persist=[['日期','市場情況','市場近一個月漲跌','起始日','10日後日期','Top20%樣本','仍在Top20%','延續率']],category=[['股票類別','數值']];
-    let classes=[];try{const mt=await fetch(MKT_CSV,{cache:'no-store'}).then(r=>r.text()),mr=Papa.parse(mt,{header:false,skipEmptyLines:true}).data||[];for(let i=0;i<4;i++){const nm=String(mr[i]?.[6]||'').trim()||['防禦股','保守股','正常股','槓桿股'][i],v=String(mr[i]?.[7]||'').trim();category.push([nm,v]);classes.push(nm+(v?'：'+v:''));}}catch(e){['防禦股','保守股','正常股','槓桿股'].forEach(x=>{category.push([x,'']);classes.push(x);});}
-    let ok=0;for(const d of dates){const got=await fetchSheetForDate(d);if(!got)continue;const actual=d;statusEl.textContent='正在處理 '+fmtDateObj(actual)+'…';const pr=await calculatePersistence(actual),rates=(pr.rows||[]).map(x=>x.rate).filter(Number.isFinite),avg=rates.length?rates.reduce((a,b)=>a+b,0)/rates.length:null,signal=persistenceSignal(avg),mret=pr.currentMarketMonth?.avgReturn??null;const stocks=applyScoreToStocks(parseStockCSVRows(got.text),signal.text,mret);stocks.forEach(r=>detail.push([fmtDateObj(actual),signal.text,mret==null?'':mret.toFixed(2)+'%',classes.join(' / '),r.name,r.code,r.sector,r.newsHeatRaw,r.newsHeatScore,r.price||'',r.fund,r.tech,r.total,r.scoreMode,r.kline,r.group,r.pe>0?r.pe:'',r.pe5y>0?r.pe5y:'',r.price_chg?r.price_chg.toFixed(1)+'%':'',r.news_up||'',r.news_cap||'']));(pr.rows||[]).forEach(x=>persist.push([fmtDateObj(actual),signal.text,mret==null?'':mret.toFixed(2)+'%',fmtDateObj(x.startDate),fmtDateObj(x.futureDate),x.sample,x.remain,x.rate==null?'':x.rate.toFixed(1)+'%']));ok++;}
-    if(!ok)throw new Error('指定期間找不到可匯出的歷史資料');XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(detail),'每日個股');XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(persist),'Top20延續');XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(category),'股票類別');const stamp=mode==='single'?sv.replace(/-/g,''):sv.replace(/-/g,'')+'-'+ev.replace(/-/g,'');XLSX.writeFile(wb,'產業研究_'+stamp+'.xlsx');statusEl.textContent='完成：共 '+ok+' 個交易日';setTimeout(closeExportDialog,1200);
-  }catch(e){console.error(e);statusEl.textContent='匯出失敗：'+(e.message||e);}finally{STOCKS=saved.STOCKS;MARKET_STATUS=saved.MARKET_STATUS;MARKET_MONTH_RETURN=saved.MARKET_MONTH_RETURN;TSMC_FUND=saved.TSMC_FUND;TSMC_TOTAL=saved.TSMC_TOTAL;BASE_DATE=saved.BASE_DATE;BASE_LABEL=saved.BASE_LABEL;compareMode=saved.compareMode;HIST=saved.HIST;}
+    let classes=[];
+    updateExportProgress(0,dates.length,'','讀取市場類別','讀取一次即可，後續日期共用。');
+    try{
+      const mt=await fetch(MKT_CSV,{cache:'no-store'}).then(r=>r.text()),mr=Papa.parse(mt,{header:false,skipEmptyLines:true}).data||[];
+      for(let i=0;i<4;i++){const nm=String(mr[i]?.[6]||'').trim()||['防禦股','保守股','正常股','槓桿股'][i],v=String(mr[i]?.[7]||'').trim();category.push([nm,v]);classes.push(nm+(v?'：'+v:''));}
+    }catch(e){['防禦股','保守股','正常股','槓桿股'].forEach(x=>{category.push([x,'']);classes.push(x);});}
+
+    let ok=0;
+    for(let idx=0;idx<dates.length;idx++){
+      const d=dates[idx];
+      const label=fmtDateObj(d);
+      updateExportProgress(idx,dates.length,label,'讀取當日資料','正在取得 '+label+' 的股票資料');
+      await yieldToUI();
+      const got=await fetchSheetForDate(d);
+      if(!got){ statusEl.textContent=label+'：找不到對應交易日資料，跳過'; updateExportProgress(idx+1,dates.length,label,'跳過','此日期沒有可用歷史分頁'); await yieldToUI(); continue; }
+
+      const pr=await calculatePersistence(d, info=>{
+        if(info.kind==='snapshot'){
+          const detailText='歷史快照 '+info.done+'/'+info.total;
+          updateExportProgress(idx,dates.length,label,'建立歷史快照',detailText);
+        }else{
+          const detailText='Top20 '+info.done+'/'+info.total;
+          updateExportProgress(idx,dates.length,label,'計算延續',detailText);
+        }
+      });
+      const rates=(pr.rows||[]).map(x=>x.rate).filter(Number.isFinite),avg=rates.length?rates.reduce((a,b)=>a+b,0)/rates.length:null,signal=persistenceSignal(avg),mret=pr.currentMarketMonth?.avgReturn??null;
+      const stocks=applyScoreToStocks(parseStockCSVRows(got.text),signal.text,mret);
+      stocks.forEach(r=>detail.push([label,signal.text,mret==null?'':mret.toFixed(2)+'%',classes.join(' / '),r.name,r.code,r.sector,r.newsHeatRaw,r.newsHeatScore,r.price||'',r.fund,r.tech,r.total,r.scoreMode,r.kline,r.group,r.pe>0?r.pe:'',r.pe5y>0?r.pe5y:'',r.price_chg?r.price_chg.toFixed(1)+'%':'',r.news_up||'',r.news_cap||'']));
+      (pr.rows||[]).forEach(x=>persist.push([label,signal.text,mret==null?'':mret.toFixed(2)+'%',fmtDateObj(x.startDate),fmtDateObj(x.futureDate),x.sample,x.remain,x.rate==null?'':x.rate.toFixed(1)+'%']));
+      ok++;
+      updateExportProgress(idx+1,dates.length,label,'完成','已整理 '+stocks.length+' 檔個股');
+      await yieldToUI();
+    }
+    if(!ok)throw new Error('指定期間找不到可匯出的歷史資料');
+
+    updateExportProgress(dates.length,dates.length,'','整理 Excel','正在建立 3 個工作表…');
+    await yieldToUI();
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(detail),'每日個股');
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(persist),'Top20延續');
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(category),'股票類別');
+    const stamp=mode==='single'?sv.replace(/-/g,''):sv.replace(/-/g,'')+'-'+ev.replace(/-/g,'');
+    updateExportProgress(dates.length,dates.length,'','輸出檔案','正在產生 Excel 下載檔…');
+    await yieldToUI();
+    XLSX.writeFile(wb,'產業研究_'+stamp+'.xlsx');
+    statusEl.textContent='完成：共 '+ok+' 個交易日，已下載 Excel';
+    updateExportProgress(dates.length,dates.length,'','完成','共 '+ok+' 個交易日、'+(detail.length-1).toLocaleString()+' 筆個股資料');
+    setTimeout(()=>{if(!EXPORT_RUNNING){const d=document.getElementById('export-dialog');if(d)d.style.display='none';}},1800);
+  }catch(e){
+    console.error(e);
+    statusEl.textContent='匯出失敗：'+(e.message||e);
+    const stageEl=document.getElementById('export-stage');if(stageEl)stageEl.textContent='發生錯誤';
+  }finally{
+    STOCKS=saved.STOCKS;MARKET_STATUS=saved.MARKET_STATUS;MARKET_MONTH_RETURN=saved.MARKET_MONTH_RETURN;TSMC_FUND=saved.TSMC_FUND;TSMC_TOTAL=saved.TSMC_TOTAL;BASE_DATE=saved.BASE_DATE;BASE_LABEL=saved.BASE_LABEL;compareMode=saved.compareMode;HIST=saved.HIST;
+    EXPORT_RUNNING=false;
+    if(startBtn){startBtn.disabled=false;startBtn.style.opacity='';startBtn.textContent='開始匯出';}
+    if(cancelBtn){cancelBtn.disabled=false;cancelBtn.style.opacity='';}
+  }
 }
 
 function reloadAll() {
