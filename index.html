@@ -184,8 +184,9 @@ th.hist-col{background:rgba(232,150,10,.06);border-left:.5px dashed var(--border
     </div>
     <div id="status-info" class="info-pop">
       <b>市場狀態與總分計算</b><br>
-      <b>① 盤整 + 市場近一個月漲跌 &lt; -3%</b>：總分 = 基本面分 × 新聞熱度分數。新聞熱度 1.00～1.20 → ×1.30；1.25～1.35 → ×1.00；1.40～1.50 → ×0.80。<br>
-      <b>② 盤整 + 市場近一個月漲跌 ≥ -3%</b>：總分 =（基本面×0.8 + 技術籌碼×0.2）×新聞熱度分數；新聞熱度分數同上。<br>
+      <b>① 盤整 + 市場近一個月漲跌 &lt; -3%</b>：總分 = 基本面分 × 新聞熱度分數；1.00/1.05/1.10/1.15/1.20 → ×1.30，1.25/1.30/1.35 → ×1.00，1.40/1.45/1.50 → ×0.80。<br>
+      <b>② 盤整 + 市場近一個月漲跌 ≥ -3%</b>：總分 =（基本面×0.8 + 技術籌碼×0.2）×新聞熱度分數；1.00/1.05 → ×1.00，1.10 → ×1.20，1.15/1.20 → ×1.30，1.25 → ×0.90，1.30/1.35/1.40/1.45 → ×0.80，1.50 → ×0.90。<br>
+
       <b>③ 延續</b>：總分 =（基本面×0.7 + 技術籌碼×0.3）×新聞熱度分數；新聞熱度 1.00/1.05 → ×1.00、1.10/1.15 → ×1.10、1.20/1.25 → ×1.15、1.30/1.35 → ×1.20、1.40/1.45 → ×1.25、1.50 → ×1.30。<br>
       強勢股延續率 ≥ 40% 判定為「延續」，< 40% 判定為「盤整」。
     </div>
@@ -242,8 +243,8 @@ th.hist-col{background:rgba(232,150,10,.06);border-left:.5px dashed var(--border
   </div>
   <div id="total-info" class="info-pop">
     <b>總分計算方式</b><br>
-    <b>盤整且市場近一個月跌幅 &lt; -3%</b>：基本面 × 新聞熱度分數。<br>
-    <b>盤整且市場近一個月跌幅 ≥ -3%</b>：（基本面×0.8 + 技術籌碼×0.2）× 新聞熱度分數。<br>
+    <b>盤整且市場近一個月漲跌 &lt; -3%</b>：基本面 × 新聞熱度分數；1.00/1.05/1.10/1.15/1.20→×1.30，1.25/1.30/1.35→×1.00，1.40/1.45/1.50→×0.80。<br>
+    <b>盤整且市場近一個月漲跌 ≥ -3%</b>：（基本面×0.8 + 技術籌碼×0.2）× 新聞熱度分數；1.00/1.05→×1.00，1.10→×1.20，1.15/1.20→×1.30，1.25→×0.90，1.30/1.35/1.40/1.45→×0.80，1.50→×0.90。<br>
     <b>延續</b>：（基本面×0.7 + 技術籌碼×0.3）× 新聞熱度分數。<br>
     以上總分皆為頁面重新計算，<b>不讀取原始 Excel 的總分</b>。新聞熱度分數依目前設定的市場狀態與新聞熱度級距套用。
   </div>
@@ -299,18 +300,26 @@ const PERSIST_SHEET_CACHE = new Map();
 let MARKET_STATUS = '盤整'; // 延續 / 盤整；等待近10期延續率計算完成後自動更新
 let MARKET_MONTH_RETURN = null; // 最新已完成起始日的整體市場近一個月平均漲跌
 
-const NEWS_HEAT_SCORE_RANGE = {
+// 盤整 + 市場近一個月跌幅 < -3%：防守型新聞熱度表
+const NEWS_HEAT_SCORE_RANGE_SEVERE = {
   1.00: 1.30, 1.05: 1.30, 1.10: 1.30, 1.15: 1.30, 1.20: 1.30,
   1.25: 1.00, 1.30: 1.00, 1.35: 1.00, 1.40: 0.80, 1.45: 0.80, 1.50: 0.80
+};
+// 盤整 + 市場近一個月漲跌 >= -3%：一般盤整新聞熱度表
+const NEWS_HEAT_SCORE_RANGE_NORMAL = {
+  1.00: 1.00, 1.05: 1.00, 1.10: 1.20, 1.15: 1.30, 1.20: 1.30,
+  1.25: 0.90, 1.30: 0.80, 1.35: 0.80, 1.40: 0.80, 1.45: 0.80, 1.50: 0.90
 };
 const NEWS_HEAT_SCORE_TREND = {
   1.00: 1.00, 1.05: 1.00, 1.10: 1.10, 1.15: 1.10, 1.20: 1.15,
   1.25: 1.15, 1.30: 1.20, 1.35: 1.20, 1.40: 1.25, 1.45: 1.25, 1.50: 1.30
 };
 
-function newsHeatFactor(heat, status) {
+function newsHeatFactor(heat, status, severeRange = false) {
   const key = Math.round((Number(heat) || 1) * 100) / 100;
-  const table = status === '延續' ? NEWS_HEAT_SCORE_TREND : NEWS_HEAT_SCORE_RANGE;
+  let table;
+  if (status === '延續') table = NEWS_HEAT_SCORE_TREND;
+  else table = severeRange ? NEWS_HEAT_SCORE_RANGE_SEVERE : NEWS_HEAT_SCORE_RANGE_NORMAL;
   return table[key] !== undefined ? table[key] : 1;
 }
 
@@ -322,7 +331,7 @@ function recalculateTotals() {
   const fundWeight = severeRange ? 1.0 : (MARKET_STATUS === '延續' ? 0.7 : 0.8);
   const techWeight = severeRange ? 0.0 : (MARKET_STATUS === '延續' ? 0.3 : 0.2);
   STOCKS.forEach(r => {
-    const heatFactor = newsHeatFactor(r.newsHeat, MARKET_STATUS);
+    const heatFactor = newsHeatFactor(r.newsHeat, MARKET_STATUS, severeRange);
     r.newsHeatScore = heatFactor;
     r.total = (r.fund * fundWeight + r.tech * techWeight) * heatFactor;
     r.scoreMode = severeRange ? '基本面×新聞熱度' : (MARKET_STATUS === '延續' ? '基本面0.7＋技術0.3×新聞熱度' : '基本面0.8＋技術0.2×新聞熱度');
