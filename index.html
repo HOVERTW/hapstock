@@ -869,19 +869,33 @@ function calcMarketOneMonthChange(snapshots, endIndex) {
   if (!latest || !prior) return null;
 
   // 每個快照的 parseDayPriceMap 已先以「日期＋股票代號」去重；
-  // 以起始日往前20個交易日，計算所有兩日期皆存在股票的平均20日漲跌。
+  // 市場近月漲幅以「最新日期的全部去重股票」為母體，
+  // 計算這批股票相對20個交易日前價格的平均漲跌。
+  // 若個別股票在起始日沒有價格，該股票報酬不納入總和，但仍保留在最新日母體中，
+  // 因此平均值的分母固定是最新日期的全部去重股票數。
   let sum = 0;
-  let count = 0;
+  let validCount = 0;
+  const totalCount = latest.prices.size;
+  if (!totalCount) return null;
+
   for (const [code, cur] of latest.prices.entries()) {
+    if (!cur || cur.price <= 0) continue;
     const old = prior.prices.get(code);
-    if (!old || old.price <= 0 || cur.price <= 0) continue;
+    if (!old || old.price <= 0) continue;
     const ret = (cur.price / old.price - 1) * 100;
     if (!Number.isFinite(ret)) continue;
     sum += ret;
-    count++;
+    validCount++;
   }
-  if (!count) return null;
-  return { avgReturn: sum / count, count, startDate: prior.date, endDate: latest.date };
+
+  if (!validCount) return null;
+  return {
+    avgReturn: sum / totalCount,
+    count: totalCount,
+    validCount,
+    startDate: prior.date,
+    endDate: latest.date
+  };
 }
 
 function renderPersistence(result, forceStatus) {
@@ -944,7 +958,7 @@ function renderPersistence(result, forceStatus) {
   document.getElementById('persist-signal').textContent = signal.text;
   document.getElementById('persist-updated').textContent = avg === null ? '資料尚未完成' : ('近10期平均延續率 ' + avg.toFixed(1) + '%');
   document.getElementById('persist-market-month').textContent = marketMonth === null ? '—' : (marketMonth.avgReturn >= 0 ? '+' : '') + marketMonth.avgReturn.toFixed(2) + '%';
-  document.getElementById('persist-market-note').textContent = marketMonth === null ? '等待資料' : (fmtDateObj(marketMonth.startDate) + ' → ' + fmtDateObj(marketMonth.endDate) + '，' + marketMonth.count + ' 檔去重股票平均');
+  document.getElementById('persist-market-note').textContent = marketMonth === null ? '等待資料' : (fmtDateObj(marketMonth.startDate) + ' → ' + fmtDateObj(marketMonth.endDate) + '，最新日 ' + marketMonth.count + ' 檔去重股票母體平均' + (marketMonth.validCount < marketMonth.count ? '（其中 ' + marketMonth.validCount + ' 檔有完整起始價）' : ''));
 
   const cards = ['persist-latest-card','persist-avg-card','persist-signal-card','persist-market-card'];
   cards.forEach(id => {
