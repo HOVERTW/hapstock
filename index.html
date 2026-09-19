@@ -1313,11 +1313,30 @@ function buildDailyExportSheet({label,status,marketReturn,stockText,persistence,
   aoa.push(stockHeaderRow);
   stockRows.forEach(r=>aoa.push(r.map(displayMaybeNumber)));
 
-  // 依照頁面上的 Top20 延續表，完整保留所有欄位。
+  // 依照頁面上的 Top20 延續區塊完整匯出：先匯出摘要卡，再匯出全部觀測期明細。
   aoa.push([]);
   aoa.push(['近20日 Top20% 強勢股延續']);
+
+  const persistRows = Array.isArray(persistence?.rows) ? persistence.rows : [];
+  const persistRates = persistRows.map(x => x.rate).filter(Number.isFinite);
+  const latestPersist = persistRows.length ? persistRows[persistRows.length - 1] : null;
+  const avgPersist = persistRates.length ? persistRates.reduce((a,b) => a + b, 0) / persistRates.length : null;
+  const persistState = Number.isFinite(avgPersist) ? (avgPersist >= 40 ? '延續' : '盤整') : '';
+
+  // 對齊網頁上的三張資訊卡／市場資訊，避免 Excel 只有明細表而缺少摘要。
+  aoa.push(['市場狀況', status || '']);
+  aoa.push(['市場近一個月漲跌', Number.isFinite(marketReturn) ? marketReturn.toFixed(2) + '%' : '']);
+  aoa.push(['最新一期延續率', latestPersist?.rate == null ? '' : latestPersist.rate.toFixed(1) + '%']);
+  aoa.push(['最新一期觀測', latestPersist ? (fmtDateObj(latestPersist.startDate) + ' → ' + fmtDateObj(latestPersist.futureDate)) : '']);
+  aoa.push(['最新一期留存', latestPersist ? ((latestPersist.remain ?? '') + '/' + (latestPersist.sample ?? '') + ' 留存') : '']);
+  aoa.push(['近10期平均延續率', avgPersist == null ? '' : avgPersist.toFixed(1) + '%']);
+  aoa.push(['平均計算方式', '取最近 10 期完成觀測的平均']);
+  aoa.push(['強勢股狀態', persistState]);
+  aoa.push([]);
+
+  // 完整保留頁面 Top20 表格的所有列與欄位。
   aoa.push(['日期','市場情況','市場近一個月漲跌','起始日','10日後日期','Top20%樣本','仍在Top20%','延續率','觀測市場近一個月漲跌']);
-  (persistence?.rows||[]).forEach(x=>{
+  persistRows.forEach(x=>{
     aoa.push([
       label,status||'',Number.isFinite(marketReturn)?marketReturn.toFixed(2)+'%':'',
       fmtDateObj(x.startDate),fmtDateObj(x.futureDate),x.sample??'',x.remain??'',x.rate==null?'':x.rate.toFixed(1)+'%',
@@ -1335,6 +1354,7 @@ function buildDailyExportSheet({label,status,marketReturn,stockText,persistence,
   // 視覺上區分區塊，避免「資料有匯出但找不到」。
   const stockTitleRow=stockStartRow-1;
   const persistTitleRow=stockEndRow+2;
+  const persistTableHeaderRow = persistTitleRow + 10;
   const titleRows=[1,5,12,stockTitleRow,persistTitleRow];
   titleRows.forEach(rr=>{
     for(let c=0;c<Math.min(aoa[rr-1]?.length||1,12);c++){
@@ -1347,6 +1367,11 @@ function buildDailyExportSheet({label,status,marketReturn,stockText,persistence,
   ws['!merges'].push({s:{r:9,c:0},e:{r:9,c:2}});      // 環境指標標題
   ws['!merges'].push({s:{r:stockTitleRow-1,c:0},e:{r:stockTitleRow-1,c:Math.min(stockHeaderRow.length-1,8)}});
   ws['!merges'].push({s:{r:persistTitleRow-1,c:0},e:{r:persistTitleRow-1,c:8}});
+  // Top20 明細表標題列加強顯示。
+  for(let c=0;c<9;c++){
+    const cell=ws[XLSX.utils.encode_col(c)+persistTableHeaderRow];
+    if(cell) cell.s={font:{bold:true,color:'FFFFFF'},fill:{fgColor:{rgb:'548235'}}};
+  }
   // 保留日期格式為文字，避免不同地區 Excel 自動改寫日期。
   return ws;
 }
@@ -1357,8 +1382,19 @@ async function runExportExcel(){
   if(!sv){statusEl.textContent='請選擇日期';return;}
   if(mode==='range'&&(!ev||ev<sv)){statusEl.textContent='結束日期必須大於或等於開始日期';return;}
   const st=new Date(sv+'T12:00:00'),ed=new Date((mode==='single'?sv:ev)+'T12:00:00'),dates=[];
-  for(let d=new Date(st);d<=ed;d.setDate(d.getDate()+1)) if(d.getDay()!==0&&d.getDay()!==6) dates.push(new Date(d));
-  if(dates.length>60){statusEl.textContent='一次最多匯出60個工作日';return;}
+  // 單日匯出不得因週末就被過濾：歷史表的分頁名稱可能是週末日期（例如 2026/9/19）。
+  // 區間模式仍以交易日為主，但若起訖日是週末且該日真的有歷史分頁，也要納入。
+  if(mode==='single'){
+    dates.push(new Date(st));
+  }else{
+    for(let d=new Date(st);d<=ed;d.setDate(d.getDate()+1)){
+      const dow=d.getDay();
+      const isWeekend=dow===0||dow===6;
+      const isEndpoint=(d.getTime()===st.getTime()||d.getTime()===ed.getTime());
+      if(!isWeekend||isEndpoint) dates.push(new Date(d));
+    }
+  }
+  if(dates.length>60){statusEl.textContent='一次最多匯出60個日期（週末端點若有歷史資料也會納入）';return;}
 
   EXPORT_RUNNING=true;
   const wrap=document.getElementById('export-progress-wrap'),startBtn=document.getElementById('export-start-btn'),cancelBtn=document.getElementById('export-cancel-btn');
@@ -1389,7 +1425,7 @@ async function runExportExcel(){
       const got=await fetchSheetForDate(d);
       if(!got){
         statusEl.textContent=label+'：找不到對應交易日資料，跳過';
-        updateExportProgress(idx+1,dates.length,label,'跳過','此日期沒有可用歷史分頁');
+        updateExportProgress(idx+1,dates.length,label,'跳過','已嘗試精確日期 '+label+'，但 Google Sheet 沒有對應分頁');
         await yieldToUI();
         continue;
       }
