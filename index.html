@@ -769,24 +769,36 @@ function fmtDateObj(d) {
   return d.getFullYear() + '/' + (d.getMonth() + 1) + '/' + d.getDate();
 }
 
-function parseDayPriceMap(text) {
+function parseDaySnapshot(text) {
   const parsed = Papa.parse(text, { header: false, skipEmptyLines: true });
   const rows = parsed.data || [];
-  if (rows.length < 2) return new Map();
+  const prices = new Map();
+  const monthReturns = new Map();
+  if (rows.length < 2) return { prices, monthReturns };
   const hd = rows[0];
   const hi = {};
   hd.forEach((h, i) => { if (h && h.trim()) hi[h.trim()] = i; });
   const hcol = (row, name) => hi[name] !== undefined ? String(row[hi[name]] || '').trim() : '';
-  const map = new Map();
   rows.slice(1).forEach(row => {
     const code = hcol(row, '代號');
     const name = hcol(row, '名稱');
     const price = n(hcol(row, '當日股價'));
     if (!code || price <= 0) return;
-    // 同一天同一股票可能因類別/產業重複；價格資料只留一份。
-    if (!map.has(code)) map.set(code, { code, name, price });
+    // 同一天同一股票可能因類別/產業重複；全部以股票代號去重，只留一份。
+    if (!prices.has(code)) {
+      prices.set(code, { code, name, price });
+      const monthReturnRaw = hcol(row, '近一個月漲幅');
+      const monthReturn = n(monthReturnRaw);
+      if (monthReturnRaw !== '' && Number.isFinite(monthReturn)) {
+        monthReturns.set(code, monthReturn);
+      }
+    }
   });
-  return map;
+  return { prices, monthReturns };
+}
+
+function parseDayPriceMap(text) {
+  return parseDaySnapshot(text).prices;
 }
 
 
@@ -807,9 +819,9 @@ async function collectTradingSnapshots(anchorDate, count, progress) {
     if (progress) progress(found.length, count, d, '讀取歷史快照');
     const got = await fetchSheetForDate(d);
     if (!got) continue;
-    const prices = parseDayPriceMap(got.text);
-    if (!prices.size) continue;
-    found.push({ date: d, sheetName: got.sheetName, prices });
+    const snap = parseDaySnapshot(got.text);
+    if (!snap.prices.size) continue;
+    found.push({ date: d, sheetName: got.sheetName, prices: snap.prices, monthReturns: snap.monthReturns });
     if (progress) progress(found.length, count, d, '歷史快照完成');
     if (found.length % 3 === 0) await yieldToUI();
   }
@@ -830,6 +842,52 @@ function top20ByReturn(startSnap, priorSnap) {
   return new Set(vals.slice(0, k).map(x => x.code));
 }
 
+async function calcLatestMarketMonthFromStockCSV() {
+  try {
+    const resp = await fetch(STOCK_CSV, { cache: 'no-store' });
+    if (!resp.ok) throw new Error('stock csv http ' + resp.status);
+    const text = await resp.text();
+    const parsed = Papa.parse(text, { header: false, skipEmptyLines: true });
+    const rows = parsed.data || [];
+    if (rows.length < 2) throw new Error('股票資料為空');
+
+    const hd = rows[0];
+    const hi = {};
+    hd.forEach((h, i) => { if (h && h.trim()) hi[h.trim()] = i; });
+    const hcol = (row, name) => hi[name] !== undefined ? String(row[hi[name]] || '').trim() : '';
+    const latestByCode = new Map();
+
+    rows.slice(1).forEach(row => {
+      const code = hcol(row, '代號');
+      const price = n(hcol(row, '當日股價'));
+      const rawReturn = hcol(row, '近一個月漲幅');
+      if (!code || price <= 0 || rawReturn === '') return;
+      const ret = n(rawReturn);
+      if (!Number.isFinite(ret)) return;
+      // 最新日期股票表若同一股票出現多列（不同類別/產業），市場計算只保留一檔。
+      if (!latestByCode.has(code)) latestByCode.set(code, ret);
+    });
+
+    if (!latestByCode.size) throw new Error('找不到近一個月漲幅資料');
+    let sum = 0;
+    latestByCode.forEach(ret => { sum += ret; });
+    const latestDateText = rows.slice(1).map(r => hcol(r, '更新日期')).find(Boolean) || '';
+    const dm = latestDateText.match(/(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/);
+    const endDate = dm ? new Date(+dm[1], +dm[2]-1, +dm[3]) : new Date();
+
+    return {
+      avgReturn: sum / latestByCode.size,
+      count: latestByCode.size,
+      validCount: latestByCode.size,
+      startDate: null,
+      endDate,
+      source: 'latest-stock-csv-month-return'
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
 async function calculatePersistence(anchorDate, progress) {
   const snapshotNeed = PERSIST_SNAPSHOT_NEED;
   const latestArr = await collectTradingSnapshots(anchorDate, snapshotNeed, (done, total, d, stage) => {
@@ -840,9 +898,10 @@ async function calculatePersistence(anchorDate, progress) {
   }
 
   const rows = [];
-  // 市場近月漲幅固定以「最新可用交易日」為基準，
-  // 不再隨著 Top20% 各列的起始日改變。
-  const latestMarketMonth = calcMarketOneMonthChange(latestArr, latestArr.length - 1);
+  // 市場近月漲幅固定以「最新日期股票表」為基準，
+  // 直接平均最新日期全部去重股票的「近一個月漲幅」，與頁面整體市場數字保持一致。
+  // 若最新股票表暫時讀不到，才退回歷史快照計算。
+  const latestMarketMonth = (await calcLatestMarketMonthFromStockCSV()) || calcMarketOneMonthChange(latestArr, latestArr.length - 1);
   const startFirst = snapshotNeed - PERSIST_HOLD_DAYS - PERSIST_LOOKBACK_DAYS;
   const startLast = snapshotNeed - PERSIST_HOLD_DAYS - 1;
   for (let i = startFirst; i <= startLast; i++) {
@@ -869,38 +928,54 @@ function calcMarketOneMonthChange(snapshots, endIndex) {
   if (!Array.isArray(snapshots)) return null;
   const end = Number.isInteger(endIndex) ? endIndex : snapshots.length - 1;
   const latest = snapshots[end];
-  const prior = snapshots[end - PERSIST_RETURN_DAYS * 2];
-  if (!latest || !prior) return null;
+  if (!latest) return null;
 
-  // 每個快照的 parseDayPriceMap 已先以「日期＋股票代號」去重；
-  // 市場近月漲幅以「最新日期的全部去重股票」為母體，
-  // 計算這批股票相對20個交易日前價格的平均漲跌。
-  // 若個別股票在起始日沒有價格，該股票報酬不納入總和，但仍保留在最新日母體中，
-  // 因此平均值的分母固定是最新日期的全部去重股票數。
+  // 備援：最新股票 CSV 無法取得時，才從歷史快照的「近一個月漲幅」欄位計算。
+  // 正常情況 calculatePersistence() 會優先使用 calcLatestMarketMonthFromStockCSV()。
+  const monthReturns = latest.monthReturns instanceof Map ? latest.monthReturns : new Map();
   let sum = 0;
-  let validCount = 0;
-  const totalCount = latest.prices.size;
-  if (!totalCount) return null;
+  let count = 0;
 
+  for (const code of latest.prices.keys()) {
+    const ret = monthReturns.get(code);
+    if (!Number.isFinite(ret)) continue;
+    sum += ret;
+    count++;
+  }
+
+  if (count) {
+    return {
+      avgReturn: sum / count,
+      count: latest.prices.size,
+      validCount: count,
+      startDate: null,
+      endDate: latest.date,
+      source: 'latest-stock-month-return'
+    };
+  }
+
+  // 舊格式若沒有「近一個月漲幅」欄位，才退回用20個交易日價格自行計算。
+  const prior = snapshots[end - PERSIST_RETURN_DAYS * 2];
+  if (!prior) return null;
   for (const [code, cur] of latest.prices.entries()) {
-    if (!cur || cur.price <= 0) continue;
     const old = prior.prices.get(code);
-    if (!old || old.price <= 0) continue;
+    if (!old || old.price <= 0 || cur.price <= 0) continue;
     const ret = (cur.price / old.price - 1) * 100;
     if (!Number.isFinite(ret)) continue;
     sum += ret;
-    validCount++;
+    count++;
   }
-
-  if (!validCount) return null;
+  if (!count) return null;
   return {
-    avgReturn: sum / totalCount,
-    count: totalCount,
-    validCount,
+    avgReturn: sum / count,
+    count: latest.prices.size,
+    validCount: count,
     startDate: prior.date,
-    endDate: latest.date
+    endDate: latest.date,
+    source: 'price-fallback'
   };
 }
+
 
 function renderPersistence(result, forceStatus) {
   const loading = document.getElementById('persist-loading');
@@ -961,7 +1036,7 @@ function renderPersistence(result, forceStatus) {
   document.getElementById('persist-signal').textContent = signal.text;
   document.getElementById('persist-updated').textContent = avg === null ? '資料尚未完成' : ('近10期平均延續率 ' + avg.toFixed(1) + '%');
   document.getElementById('persist-market-month').textContent = marketMonth === null ? '—' : (marketMonth.avgReturn >= 0 ? '+' : '') + marketMonth.avgReturn.toFixed(2) + '%';
-  document.getElementById('persist-market-note').textContent = marketMonth === null ? '等待資料' : (fmtDateObj(marketMonth.startDate) + ' → ' + fmtDateObj(marketMonth.endDate) + '，最新日 ' + marketMonth.count + ' 檔去重股票母體平均' + (marketMonth.validCount < marketMonth.count ? '（其中 ' + marketMonth.validCount + ' 檔有完整起始價）' : ''));
+  document.getElementById('persist-market-note').textContent = marketMonth === null ? '等待資料' : '最新日 ' + fmtDateObj(marketMonth.endDate) + '，' + marketMonth.count + ' 檔去重股票的「近一個月漲幅」平均';
 
   const cards = ['persist-latest-card','persist-avg-card','persist-signal-card','persist-market-card'];
   cards.forEach(id => {
@@ -974,7 +1049,7 @@ function renderPersistence(result, forceStatus) {
   if (marketMonth !== null) document.getElementById('persist-market-card').classList.add(marketMonth.avgReturn > 0 ? 'persist-good' : marketMonth.avgReturn < 0 ? 'persist-weak' : 'persist-mid');
 
   render();
-  note.textContent = '算法：先以「日期＋股票代號」去重；每一期計算 10 日報酬並取前 20%，再與 10 個交易日後的 Top20% 做集合交集。近10期則以最近10個「已可完成 t+10 驗證」的起始日計算；「市場近月漲跌」固定以最新可用交易日的全部去重股票，計算相對20個交易日前的平均漲跌。' +
+  note.textContent = '算法：先以「日期＋股票代號」去重；每一期計算 10 日報酬並取前 20%，再與 10 個交易日後的 Top20% 做集合交集。近10期則以最近10個「已可完成 t+10 驗證」的起始日計算；「市場近月漲跌」固定以最新日期股票表的全部去重股票，直接平均該日資料中的「近一個月漲幅」；最新股票表無法取得時，才退回歷史快照計算。' +
     (forceStatus ? '　剛剛完成手動更新。' : '　頁面會定期自動檢查最新日期分頁。');
 }
 
