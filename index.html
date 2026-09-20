@@ -1179,7 +1179,7 @@ function updateExportProgress(done,total,current,stage,detail){
 }
 function openExportDialog() {
   let dlg=document.getElementById('export-dialog');
-  if(!dlg){dlg=document.createElement('div');dlg.id='export-dialog';dlg.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';dlg.innerHTML=`<div style="width:min(500px,100%);background:var(--bg);color:var(--text);border-radius:14px;padding:20px;box-shadow:0 10px 40px rgba(0,0,0,.25)"><div style="font-size:17px;font-weight:700;margin-bottom:14px">匯出 Excel</div><div style="font-size:12px;color:var(--text2);margin-bottom:12px">匯出格式：每個交易日一個工作表；完整保留當日股票原始欄位，並附上市場狀態、貨幣市場 4 組建議占比、環境指標，以及完整 Top20% 強勢股延續表。</div><div style="display:flex;gap:12px;margin-bottom:14px"><label><input type="radio" name="export-mode" value="single" checked onchange="toggleExportRange()"> 單天</label><label><input type="radio" name="export-mode" value="range" onchange="toggleExportRange()"> 日期範圍</label></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><label style="font-size:12px">日期<input id="export-start" type="date" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:7px;border:.5px solid var(--border2);border-radius:7px;background:var(--bg);color:var(--text)"></label><label id="export-end-wrap" style="font-size:12px;display:none">結束日期<input id="export-end" type="date" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:7px;border:.5px solid var(--border2);border-radius:7px;background:var(--bg);color:var(--text)"></label></div><div id="export-progress-wrap" style="margin-top:14px;padding:11px 12px;border:1px solid var(--border2);border-radius:9px;background:rgba(127,127,127,.05);display:none"><div style="display:flex;justify-content:space-between;gap:10px;font-size:11px;color:var(--text2);margin-bottom:7px"><span id="export-progress-text">0%　0 / 0 個交易日</span><span id="export-stage">準備中…</span></div><div style="height:8px;background:var(--border);border-radius:99px;overflow:hidden"><div id="export-progress-bar" style="height:100%;width:0%;background:#1d9e75;transition:width .15s ease"></div></div><div id="export-progress-detail" style="font-size:10px;color:var(--text3);margin-top:7px"></div></div><div id="export-status" style="font-size:11px;color:var(--text2);min-height:18px;margin-top:10px"></div><div style="display:flex;justify-content:flex-end;gap:8px;margin-top:15px"><button id="export-cancel-btn" onclick="closeExportDialog()" style="padding:7px 13px;border:1px solid var(--border2);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer">取消</button><button id="export-start-btn" onclick="runExportExcel()" style="padding:7px 13px;border:0;border-radius:7px;background:#1d9e75;color:white;cursor:pointer">開始匯出</button></div></div>`;document.body.appendChild(dlg);const ds=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');const def=BASE_DATE||new Date();document.getElementById('export-start').value=ds(def);document.getElementById('export-end').value=ds(new Date());}
+  if(!dlg){dlg=document.createElement('div');dlg.id='export-dialog';dlg.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';dlg.innerHTML=`<div style="width:min(500px,100%);background:var(--bg);color:var(--text);border-radius:14px;padding:20px;box-shadow:0 10px 40px rgba(0,0,0,.25)"><div style="font-size:17px;font-weight:700;margin-bottom:14px">匯出 Excel</div><div style="font-size:12px;color:var(--text2);margin-bottom:12px">匯出格式：每個交易日一個工作表；完整保留當日股票原始欄位，並附上市場狀態，以及完整 Top20% 強勢股延續摘要與明細。貨幣市場訊號相關資料不匯出。</div><div style="display:flex;gap:12px;margin-bottom:14px"><label><input type="radio" name="export-mode" value="single" checked onchange="toggleExportRange()"> 單天</label><label><input type="radio" name="export-mode" value="range" onchange="toggleExportRange()"> 日期範圍</label></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><label style="font-size:12px">日期<input id="export-start" type="date" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:7px;border:.5px solid var(--border2);border-radius:7px;background:var(--bg);color:var(--text)"></label><label id="export-end-wrap" style="font-size:12px;display:none">結束日期<input id="export-end" type="date" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:7px;border:.5px solid var(--border2);border-radius:7px;background:var(--bg);color:var(--text)"></label></div><div id="export-progress-wrap" style="margin-top:14px;padding:11px 12px;border:1px solid var(--border2);border-radius:9px;background:rgba(127,127,127,.05);display:none"><div style="display:flex;justify-content:space-between;gap:10px;font-size:11px;color:var(--text2);margin-bottom:7px"><span id="export-progress-text">0%　0 / 0 個交易日</span><span id="export-stage">準備中…</span></div><div style="height:8px;background:var(--border);border-radius:99px;overflow:hidden"><div id="export-progress-bar" style="height:100%;width:0%;background:#1d9e75;transition:width .15s ease"></div></div><div id="export-progress-detail" style="font-size:10px;color:var(--text3);margin-top:7px"></div></div><div id="export-status" style="font-size:11px;color:var(--text2);min-height:18px;margin-top:10px"></div><div style="display:flex;justify-content:flex-end;gap:8px;margin-top:15px"><button id="export-cancel-btn" onclick="closeExportDialog()" style="padding:7px 13px;border:1px solid var(--border2);border-radius:7px;background:var(--bg);color:var(--text);cursor:pointer">取消</button><button id="export-start-btn" onclick="runExportExcel()" style="padding:7px 13px;border:0;border-radius:7px;background:#1d9e75;color:white;cursor:pointer">開始匯出</button></div></div>`;document.body.appendChild(dlg);const ds=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');const def=BASE_DATE||new Date();document.getElementById('export-start').value=ds(def);document.getElementById('export-end').value=ds(new Date());}
   dlg.style.display='flex';
 }
 function toggleExportRange(){const r=document.querySelector('input[name="export-mode"]:checked')?.value==='range';document.getElementById('export-end-wrap').style.display=r?'block':'none';}
@@ -1269,7 +1269,7 @@ function autosizeWorksheet(ws, rows, specialCols=[]){
   ws['!cols']=widths.map(w=>({wch:w}));
 }
 
-function buildDailyExportSheet({label,status,marketReturn,stockText,persistence,marketData}){
+function buildDailyExportSheet({label,status,marketReturn,stockText,persistence}){
   const raw=parseRawStockCSV(stockText);
   if(!raw.headers.length) throw new Error(label+'：股票資料沒有表頭');
 
@@ -1299,14 +1299,6 @@ function buildDailyExportSheet({label,status,marketReturn,stockText,persistence,
   aoa.push(['產業研究｜每日匯出',label]);
   aoa.push(['市場狀況',status||'']);
   aoa.push(['市場近一個月漲跌',Number.isFinite(marketReturn)?marketReturn.toFixed(2)+'%':'']);
-  aoa.push([]);
-  aoa.push(['貨幣市場訊號｜4 組建議占比']);
-  aoa.push(['建議類型','占比']);
-  marketData.marketBlocks.forEach(b=>aoa.push([b.name,b.value]));
-  aoa.push([]);
-  aoa.push(['貨幣市場環境指標']);
-  aoa.push(['指標','值1','值2']);
-  marketData.env.forEach(x=>aoa.push(x));
   aoa.push([]);
   aoa.push(['個股資料｜完整保留股票資料源的全部欄位']);
   const stockStartRow=aoa.length+1;
@@ -1355,7 +1347,7 @@ function buildDailyExportSheet({label,status,marketReturn,stockText,persistence,
   const stockTitleRow=stockStartRow-1;
   const persistTitleRow=stockEndRow+2;
   const persistTableHeaderRow = persistTitleRow + 10;
-  const titleRows=[1,5,12,stockTitleRow,persistTitleRow];
+  const titleRows=[1,4,stockTitleRow,persistTitleRow];
   titleRows.forEach(rr=>{
     for(let c=0;c<Math.min(aoa[rr-1]?.length||1,12);c++){
       const cell=ws[XLSX.utils.encode_col(c)+(rr)];
@@ -1363,8 +1355,6 @@ function buildDailyExportSheet({label,status,marketReturn,stockText,persistence,
     }
   });
   if(!ws['!merges']) ws['!merges']=[];
-  ws['!merges'].push({s:{r:4,c:0},e:{r:4,c:1}});      // 貨幣市場標題
-  ws['!merges'].push({s:{r:9,c:0},e:{r:9,c:2}});      // 環境指標標題
   ws['!merges'].push({s:{r:stockTitleRow-1,c:0},e:{r:stockTitleRow-1,c:Math.min(stockHeaderRow.length-1,8)}});
   ws['!merges'].push({s:{r:persistTitleRow-1,c:0},e:{r:persistTitleRow-1,c:8}});
   // Top20 明細表標題列加強顯示。
@@ -1408,16 +1398,6 @@ async function runExportExcel(){
     const wb=XLSX.utils.book_new();
     let ok=0;
 
-    // 貨幣市場資料只抓一次，四組建議占比使用正確的 G1/G3/G5/G7 與 G2/G4/G6/G8。
-    updateExportProgress(0,dates.length,'','讀取貨幣市場','讀取一次即可，後續日期共用。');
-    let marketData={marketBlocks:[{name:'防禦股',value:''},{name:'保守股',value:''},{name:'正常股',value:''},{name:'槓桿股',value:''}],env:[],rawRows:[]};
-    try{
-      const mt=await fetch(MKT_CSV,{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('market csv http '+r.status);return r.text();});
-      marketData=extractMarketExportData(mt);
-    }catch(e){
-      console.warn('貨幣市場資料讀取失敗',e);
-    }
-
     for(let idx=0;idx<dates.length;idx++){
       const d=dates[idx],label=fmtDateObj(d);
       updateExportProgress(idx,dates.length,label,'讀取當日資料','正在取得 '+label+' 的完整股票欄位');
@@ -1441,11 +1421,11 @@ async function runExportExcel(){
       const avg=rates.length?rates.reduce((a,b)=>a+b,0)/rates.length:null;
       const signal=persistenceSignal(avg);
       const mret=pr.currentMarketMonth?.avgReturn??null;
-      const ws=buildDailyExportSheet({label,status:signal.text,marketReturn:mret,stockText:got.text,persistence:pr,marketData});
+      const ws=buildDailyExportSheet({label,status:signal.text,marketReturn:mret,stockText:got.text,persistence:pr});
       const sheetName=safeSheetName(d);
       XLSX.utils.book_append_sheet(wb,ws,sheetName);
       ok++;
-      updateExportProgress(idx+1,dates.length,label,'完成','已建立 '+sheetName+'，完整股票欄位＋4組貨幣市場占比＋Top20延續');
+      updateExportProgress(idx+1,dates.length,label,'完成','已建立 '+sheetName+'，完整股票欄位＋Top20延續摘要與明細（不含貨幣市場資料）');
       await yieldToUI();
     }
 
@@ -1454,7 +1434,7 @@ async function runExportExcel(){
     await yieldToUI();
     const stamp=mode==='single'?sv.replace(/-/g,''):sv.replace(/-/g,'')+'-'+ev.replace(/-/g,'');
     XLSX.writeFile(wb,'產業研究_'+stamp+'_每日分頁完整版.xlsx');
-    statusEl.textContent='完成：共 '+ok+' 個交易日、'+ok+' 個每日分頁；每頁含完整股票欄位、貨幣市場 4 組占比及 Top20 延續表';
+    statusEl.textContent='完成：共 '+ok+' 個交易日、'+ok+' 個每日分頁；每頁含完整股票欄位及 Top20 延續摘要與明細（不含貨幣市場資料）';
     updateExportProgress(dates.length,dates.length,'','完成','共 '+ok+' 個交易日、'+ok+' 個每日工作表');
     setTimeout(()=>{if(!EXPORT_RUNNING){const d=document.getElementById('export-dialog');if(d)d.style.display='none';}},2200);
   }catch(e){
