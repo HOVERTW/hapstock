@@ -229,8 +229,7 @@ th.hist-col{background:rgba(232,150,10,.06);border-left:.5px dashed var(--border
     <div class="chip" id="volatility-btn" onclick="toggleVolatility(this)" title="啟用後，隱藏近一個月漲幅介於 -5% 至 +5%（含），以及漲幅 ≥ +50% 或 ≤ -50% 的股票" style="border-color:#d97706;color:#d97706">隱藏大小波動</div>
     <span class="thr">基本面 ≥ <input type="number" id="thr-fund" step="0.1" min="0" placeholder="—" oninput="render()"></span>
     <span class="thr">技術面 ≥ <input type="number" id="thr-tech" step="0.1" min="0" placeholder="—" oninput="render()"></span>
-    <span class="thr">成交額 &gt; <input type="number" id="thr-turnover" step="0.01" min="0" placeholder="數值(億)" oninput="updateTurnoverButton();render()" style="width:84px"> 億</span>
-    <div class="chip" id="turnover-btn" onclick="toggleTurnover(this)" title="輸入日均成交額門檻後，點擊啟用篩選" style="border-color:#0d9488;color:#0d9488">套用成交額篩選</div>
+    <span class="thr">成交額 &gt; <input type="number" id="thr-turnover" step="0.01" min="0" placeholder="數值(億)" oninput="render()" style="width:84px" title="輸入數字後立即依日均成交額篩選；清空則取消篩選"> 億</span>
     <div class="chip" id="xls-btn" onclick="openExportDialog()" style="border-color:#1d9e75;color:#1d9e75">⬇ 匯出 Excel</div>
     <input type="date" id="base-date" onchange="setBaseline(this)" title="回測基準日（清空=今日）" style="font-size:12px;padding:4px 8px;border-radius:var(--r);border:.5px solid #7c5cbf;background:var(--bg);color:var(--text);outline:none;cursor:pointer">
     <span id="base-status" style="font-size:11px;color:var(--text3);align-self:center"></span>
@@ -282,7 +281,7 @@ const MKT_CSV   = "https://docs.google.com/spreadsheets/d/1IgRRZIwKmQ-9T7od3obIQ
 let TSMC_FUND = 0, TSMC_TOTAL = 0; // 動態從資料讀取台積電分數
 
 let STOCKS = [], MKT = { escape:0, charge:0, rows:[] };
-let newsHeatFilter = 'all', aboveOnly = false, dedupMode = false, hideSmallExtremeVolatility = false, turnoverFilterEnabled = false, sortK = 'total', sortD = -1;
+let newsHeatFilter = 'all', aboveOnly = false, dedupMode = false, hideSmallExtremeVolatility = false, sortK = 'total', sortD = -1;
 let compareMode = 'none';
 let BASE_DATE = null;   // 回測基準日（null = 今日即時資料）
 let BASE_LABEL = '';
@@ -561,13 +560,14 @@ function getRows() {
       const monthlyChange = parseFloat(String(r.price_chg_raw).replace(/[^\d.\-]/g, ''));
       if (Number.isFinite(monthlyChange) && ((monthlyChange >= -5 && monthlyChange <= 5) || monthlyChange >= 50 || monthlyChange <= -50)) return false;
     }
-    if (turnoverFilterEnabled) {
-      const turnoverInput = document.getElementById('thr-turnover');
-      const minTurnover = turnoverInput && turnoverInput.value !== '' ? Number(turnoverInput.value) : NaN;
-      // 啟用成交額篩選時，只顯示有成交額資料且嚴格大於門檻的股票。
-      if (Number.isFinite(minTurnover) && minTurnover >= 0) {
-        if (!Number.isFinite(r.avg_turnover) || r.avg_turnover <= minTurnover) return false;
-      }
+    const turnoverInput = document.getElementById('thr-turnover');
+    const turnoverRaw = turnoverInput ? turnoverInput.value.trim() : '';
+    // 成交額輸入欄有數值時立即篩選，清空輸入欄則自動取消此篩選；不做任何單位換算。
+    if (turnoverRaw !== '') {
+      const minTurnover = Number(turnoverRaw);
+      if (!Number.isFinite(minTurnover) || minTurnover < 0) return false;
+      // 僅顯示有成交額資料且嚴格大於門檻的股票。
+      if (!Number.isFinite(r.avg_turnover) || r.avg_turnover <= minTurnover) return false;
     }
     if (aboveOnly && (r.fund < TSMC_FUND || r.total < TSMC_TOTAL)) return false;
     if (minFund !== null && r.fund < minFund) return false;
@@ -1153,37 +1153,6 @@ function toggleVolatility(el) {
   el.classList.toggle('on', hideSmallExtremeVolatility);
   el.style.background = hideSmallExtremeVolatility ? 'rgba(217,119,6,.12)' : '';
   el.textContent = hideSmallExtremeVolatility ? '隱藏大小波動 ✓' : '隱藏大小波動';
-  render();
-}
-function updateTurnoverButton() {
-  const btn = document.getElementById('turnover-btn');
-  const input = document.getElementById('thr-turnover');
-  if (!btn || !input) return;
-  const raw = input.value.trim();
-  const value = raw === '' ? NaN : Number(raw);
-  if (turnoverFilterEnabled && Number.isFinite(value) && value >= 0) {
-    btn.textContent = '成交額 > ' + value.toLocaleString('zh-TW', {maximumFractionDigits: 2}) + ' 億 ✓';
-  } else if (turnoverFilterEnabled) {
-    btn.textContent = '請輸入成交額門檻';
-  } else {
-    btn.textContent = '套用成交額篩選';
-  }
-}
-function toggleTurnover(el) {
-  const input = document.getElementById('thr-turnover');
-  const raw = input ? input.value.trim() : '';
-  const value = raw === '' ? NaN : Number(raw);
-  if (!turnoverFilterEnabled && (!Number.isFinite(value) || value < 0)) {
-    if (input) {
-      input.focus();
-      input.placeholder = '請輸入';
-    }
-    return;
-  }
-  turnoverFilterEnabled = !turnoverFilterEnabled;
-  el.classList.toggle('on', turnoverFilterEnabled);
-  el.style.background = turnoverFilterEnabled ? 'rgba(13,148,136,.12)' : '';
-  updateTurnoverButton();
   render();
 }
 function toggleInfo(id, btn) {
