@@ -584,8 +584,12 @@ function getRows() {
     rows = Object.values(best);
   }
   return rows.sort((a, b) => {
-    const av = a[sortK] ?? 0, bv = b[sortK] ?? 0;
-    return typeof av === 'string' ? av.localeCompare(bv) * sortD : (av - bv) * sortD;
+    let av = a[sortK] ?? 0, bv = b[sortK] ?? 0;
+    if (sortK === 'avg_turnover') {
+      if (!Number.isFinite(av)) av = -Infinity;
+      if (!Number.isFinite(bv)) bv = -Infinity;
+    }
+    return typeof av === 'string' ? av.localeCompare(String(bv)) * sortD : (av - bv) * sortD;
   });
 }
 
@@ -1235,24 +1239,45 @@ function openExportDialog() {
 function toggleExportRange(){const r=document.querySelector('input[name="export-mode"]:checked')?.value==='range';document.getElementById('export-end-wrap').style.display=r?'block':'none';}
 function closeExportDialog(){if(EXPORT_RUNNING)return;const d=document.getElementById('export-dialog');if(d)d.style.display='none';}
 
+function parseTurnoverValue(value){
+  // BK 已由使用者整理成「億」；只解析原值，不做單位換算。
+  // 支援千分位逗號、尾端「億」字與一般數字格式；空白或非數字視為缺值。
+  const raw=String(value??'').trim();
+  if(!raw || /^[—–-]+$/.test(raw)) return NaN;
+  const cleaned=raw.replace(/,/g,'').replace(/[−–]/g,'-').replace(/億/g,'').trim();
+  if(!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(cleaned)) return NaN;
+  const valueNum=Number(cleaned);
+  return Number.isFinite(valueNum) ? valueNum : NaN;
+}
+
 function parseStockCSVRows(text){
   const parsed=Papa.parse(text,{header:false,skipEmptyLines:true}), all=parsed.data||[];
   if(all.length<2)return[];
   const hdr=all[0],ci={};
-  hdr.forEach((h,i)=>{if(h&&String(h).trim())ci[String(h).trim()]=i;});
+  const normalizeHeader=value=>String(value??'').trim().replace(/\s+/g,'').replace(/[（）]/g,m=>m==='（'?'(' : ')');
+  hdr.forEach((h,i)=>{if(h&&String(h).trim())ci[normalizeHeader(h)]=i;});
   const col=(row,...names)=>{
     for(const nm of names){
-      if(ci[nm]!==undefined){const v=String(row[ci[nm]]??'').trim();if(v)return v;}
+      const idx=ci[normalizeHeader(nm)];
+      if(idx!==undefined){const v=String(row[idx]??'').trim();if(v)return v;}
     }
     return '';
   };
+  // 優先用欄名定位，避免 CSV 匯出時空白標題／空白 A 欄造成索引位移；
+  // 來源確定為 BK 時，才以 BK（第 63 欄，index 62）作為固定備援。不讀「萬」欄、不換算。
+  const turnoverHeaderIndex=hdr.findIndex(h=>{
+    const key=normalizeHeader(h);
+    return key.includes('日均成交額') && key.includes('億') && !key.includes('萬');
+  });
   return all.slice(1).map(row=>{
     const name=col(row,'名稱');
     if(!name)return null;
     const w=col(row,'新聞熱度','類別加權');
     const monthChange=col(row,'近一個月漲幅');
-    // 成交額來源已由使用者預先整理為「億」；僅讀取億欄或 BK 欄原值，不做單位換算。
-    const avgTurnoverRaw=col(row,'日均成交額(億)','日均成交額（億）') || String(row[62]??'').trim();
+    const headerTurnover=turnoverHeaderIndex>=0 ? String(row[turnoverHeaderIndex]??'').trim() : '';
+    const bkTurnover=String(row[62]??'').trim();
+    const avgTurnoverRaw=headerTurnover!=='' ? headerTurnover : bkTurnover;
+    const avgTurnover=parseTurnoverValue(avgTurnoverRaw);
     return {
       name,
       code:col(row,'代號'),
@@ -1269,7 +1294,7 @@ function parseStockCSVRows(text){
       date:col(row,'更新日期','日期'),
       price_chg:n(monthChange),
       price_chg_raw:monthChange,
-      avg_turnover:n(avgTurnoverRaw),
+      avg_turnover:avgTurnover,
       avg_turnover_raw:avgTurnoverRaw
     };
   }).filter(Boolean);
