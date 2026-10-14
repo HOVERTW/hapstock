@@ -229,7 +229,7 @@ th.hist-col{background:rgba(232,150,10,.06);border-left:.5px dashed var(--border
     <div class="chip" id="volatility-btn" onclick="toggleVolatility(this)" title="啟用後，隱藏近一個月漲幅介於 -5% 至 +5%（含），以及漲幅 ≥ +50% 或 ≤ -50% 的股票" style="border-color:#d97706;color:#d97706">隱藏大小波動</div>
     <span class="thr">基本面 ≥ <input type="number" id="thr-fund" step="0.1" min="0" placeholder="—" oninput="render()"></span>
     <span class="thr">技術面 ≥ <input type="number" id="thr-tech" step="0.1" min="0" placeholder="—" oninput="render()"></span>
-    <span class="thr">成交額 &gt; <input type="number" id="thr-turnover" step="100" min="0" placeholder="數值" oninput="updateTurnoverButton();render()" style="width:68px"> 萬</span>
+    <span class="thr">成交額 &gt; <input type="number" id="thr-turnover" step="0.01" min="0" placeholder="數值(億)" oninput="updateTurnoverButton();render()" style="width:84px"> 億</span>
     <div class="chip" id="turnover-btn" onclick="toggleTurnover(this)" title="輸入日均成交額門檻後，點擊啟用篩選" style="border-color:#0d9488;color:#0d9488">套用成交額篩選</div>
     <div class="chip" id="xls-btn" onclick="openExportDialog()" style="border-color:#1d9e75;color:#1d9e75">⬇ 匯出 Excel</div>
     <input type="date" id="base-date" onchange="setBaseline(this)" title="回測基準日（清空=今日）" style="font-size:12px;padding:4px 8px;border-radius:var(--r);border:.5px solid #7c5cbf;background:var(--bg);color:var(--text);outline:none;cursor:pointer">
@@ -268,7 +268,7 @@ th.hist-col{background:rgba(232,150,10,.06);border-left:.5px dashed var(--border
         <th onclick="sort('pe')">本益比</th>
         <th onclick="sort('pe5y')">近5年平均PE</th>
       <th onclick="sort('price_chg')">近1月漲跌%</th>
-      <th onclick="sort('avg_turnover')">日均成交額(萬)</th>
+      <th onclick="sort('avg_turnover')">日均成交額(億)</th>
       </tr></thead>
       <tbody id="tbl"></tbody>
     </table>
@@ -606,7 +606,7 @@ function buildHead() {
     '<th onclick="sort(\'pe\')">本益比</th>' +
     '<th onclick="sort(\'pe5y\')">近5年平均PE</th>' +
     '<th onclick="sort(\'price_chg\')">近1月漲跌%</th>' +
-    '<th onclick="sort(\'avg_turnover\')">日均成交額(萬)</th>' +
+    '<th onclick="sort(\'avg_turnover\')">日均成交額(億)</th>' +
     '</tr>';
   // restore sort indicator
   document.querySelectorAll('#thead-row th').forEach(th => {
@@ -1158,7 +1158,7 @@ function updateTurnoverButton() {
   const raw = input.value.trim();
   const value = raw === '' ? NaN : Number(raw);
   if (turnoverFilterEnabled && Number.isFinite(value) && value >= 0) {
-    btn.textContent = '成交額 > ' + value.toLocaleString('zh-TW', {maximumFractionDigits: 2}) + ' 萬 ✓';
+    btn.textContent = '成交額 > ' + value.toLocaleString('zh-TW', {maximumFractionDigits: 2}) + ' 億 ✓';
   } else if (turnoverFilterEnabled) {
     btn.textContent = '請輸入成交額門檻';
   } else {
@@ -1251,8 +1251,8 @@ function parseStockCSVRows(text){
     if(!name)return null;
     const w=col(row,'新聞熱度','類別加權');
     const monthChange=col(row,'近一個月漲幅');
-    // 優先依欄名讀取；若匯出的表頭沒有標籤，則以試算表 BK 欄（0-based index 62）遞補。
-    const avgTurnoverRaw=col(row,'日均成交額(萬)','日均成交額（萬）') || String(row[62]??'').trim();
+    // 成交額來源已由使用者預先整理為「億」；僅讀取億欄或 BK 欄原值，不做單位換算。
+    const avgTurnoverRaw=col(row,'日均成交額(億)','日均成交額（億）') || String(row[62]??'').trim();
     return {
       name,
       code:col(row,'代號'),
