@@ -162,7 +162,7 @@ th.hist-col{background:rgba(232,150,10,.06);border-left:.5px dashed var(--border
   <div class="persist-head">
     <div>
       <div class="persist-title">近20日 Top20% 強勢股延續</div>
-      <div class="persist-sub">先以「日期＋股票代號」去重；每一期計算 10 日報酬，取前 20%；再與 10 個交易日後的 Top20% 做集合交集。近10期以最近10個「已可完成 t+10 驗證」的起始日計算。</div>
+      <div class="persist-sub">先以「日期＋股票代號」去重；每一期計算 5 日報酬，取前 20%；再與 5 個交易日後的 Top20% 做集合交集。顯示最近 10 個「已可完成 t+5 驗證」的起始日；若日期分頁空白或缺漏，會自動往更早的有效交易資料遞補。</div>
     </div>
     <button class="persist-btn" onclick="loadPersistence(true)">↻ 立即更新</button>
   </div>
@@ -196,11 +196,11 @@ th.hist-col{background:rgba(232,150,10,.06);border-left:.5px dashed var(--border
       <div class="persist-card-note" id="persist-market-note">等待資料</div>
     </div>
   </div>
-  <div id="persist-loading" class="persist-loading"><span class="spin"></span> 正在讀取近40個交易日歷史資料...</div>
+  <div id="persist-loading" class="persist-loading"><span class="spin"></span> 正在讀取近20個有效交易日歷史資料（空白日期會往前遞補）...</div>
   <div id="persist-table-wrap" class="persist-table-wrap" style="display:none">
     <table class="persist-table">
       <thead><tr>
-        <th>起始日</th><th>10日後日期</th><th>Top20% 樣本</th><th>仍在 Top20%</th><th>延續率</th><th>市場近月漲跌</th>
+        <th>起始日</th><th>5日後日期</th><th>Top20% 樣本</th><th>仍在 Top20%</th><th>延續率</th><th>市場近月漲跌</th>
       </tr></thead>
       <tbody id="persist-tbody"></tbody>
     </table>
@@ -226,6 +226,7 @@ th.hist-col{background:rgba(232,150,10,.06);border-left:.5px dashed var(--border
     </select>
     <div class="chip hi" id="above-btn" onclick="toggleAbove(this)">★ 達台積標準（基本面＋總分）</div>
     <div class="chip" id="dedup-btn" onclick="toggleDedup(this)" style="border-color:#7c5cbf;color:#7c5cbf">去除重複（保留基本面分高）</div>
+    <div class="chip" id="volatility-btn" onclick="toggleVolatility(this)" title="啟用後，隱藏近一個月漲幅介於 -5% 至 +5%（含），以及漲幅 ≥ +50% 或 ≤ -50% 的股票" style="border-color:#d97706;color:#d97706">隱藏大小波動</div>
     <span class="thr">基本面 ≥ <input type="number" id="thr-fund" step="0.1" min="0" placeholder="—" oninput="render()"></span>
     <span class="thr">技術面 ≥ <input type="number" id="thr-tech" step="0.1" min="0" placeholder="—" oninput="render()"></span>
     <div class="chip" id="xls-btn" onclick="openExportDialog()" style="border-color:#1d9e75;color:#1d9e75">⬇ 匯出 Excel</div>
@@ -280,7 +281,7 @@ const MKT_CSV   = "https://docs.google.com/spreadsheets/d/1IgRRZIwKmQ-9T7od3obIQ
 let TSMC_FUND = 0, TSMC_TOTAL = 0; // 動態從資料讀取台積電分數
 
 let STOCKS = [], MKT = { escape:0, charge:0, rows:[] };
-let newsHeatFilter = 'all', aboveOnly = false, dedupMode = false, sortK = 'total', sortD = -1;
+let newsHeatFilter = 'all', aboveOnly = false, dedupMode = false, hideSmallExtremeVolatility = false, sortK = 'total', sortD = -1;
 let compareMode = 'none';
 let BASE_DATE = null;   // 回測基準日（null = 今日即時資料）
 let BASE_LABEL = '';
@@ -288,10 +289,10 @@ let HIST = null;          // 歷史資料 map
 let histDateLabel = '';
 
 // ── Top20% 強勢股延續 ──
-const PERSIST_LOOKBACK_DAYS = 10;   // 顯示近10個已完成的延續觀測
-const PERSIST_RETURN_DAYS = 10;     // 10日報酬
-const PERSIST_HOLD_DAYS = 10;       // 10個交易日後檢查是否仍在Top20%
-const PERSIST_SNAPSHOT_NEED = PERSIST_RETURN_DAYS * 2 + PERSIST_LOOKBACK_DAYS + PERSIST_HOLD_DAYS; // 40 個交易日：供每個起始日計算前20日市場漲跌
+const PERSIST_LOOKBACK_DAYS = 10;   // 顯示最近10個已完成的延續觀測
+const PERSIST_RETURN_DAYS = 5;      // 以過去5個交易日計算報酬
+const PERSIST_HOLD_DAYS = 5;        // 5個交易日後檢查是否仍在Top20%
+const PERSIST_SNAPSHOT_NEED = PERSIST_RETURN_DAYS + PERSIST_LOOKBACK_DAYS + PERSIST_HOLD_DAYS; // 20份有效交易日快照；缺漏日期由更早資料遞補
 const PERSIST_SHEET_CACHE_MS = 30 * 60 * 1000;
 let PERSIST_DATA = [];
 let PERSIST_LAST_DATE = null;
@@ -555,6 +556,10 @@ function getRows() {
   const minTech = (tv0 !== undefined && tv0 !== '') ? parseFloat(tv0) : null;
   let rows = STOCKS.filter(r => {
     if (newsHeatFilter !== 'all' && r.newsHeat < parseFloat(newsHeatFilter)) return false;
+    if (hideSmallExtremeVolatility && r.price_chg_raw !== '' && r.price_chg_raw != null) {
+      const monthlyChange = parseFloat(String(r.price_chg_raw).replace(/[^\d.\-]/g, ''));
+      if (Number.isFinite(monthlyChange) && ((monthlyChange >= -5 && monthlyChange <= 5) || monthlyChange >= 50 || monthlyChange <= -50)) return false;
+    }
     if (aboveOnly && (r.fund < TSMC_FUND || r.total < TSMC_TOTAL)) return false;
     if (minFund !== null && r.fund < minFund) return false;
     if (minTech !== null && r.tech < minTech) return false;
@@ -811,7 +816,7 @@ function persistenceSignal(rate) {
 async function collectTradingSnapshots(anchorDate, count, progress) {
   const found = [];
   const cursor = new Date(anchorDate);
-  for (let extra = 0; extra < 70 && found.length < count; extra++) {
+  for (let extra = 0; extra < 180 && found.length < count; extra++) {
     const d = new Date(cursor);
     d.setDate(cursor.getDate() - extra);
     const dow = d.getDay();
@@ -920,7 +925,7 @@ async function calculatePersistence(anchorDate, progress) {
   }
 
   const rows = [];
-  const startFirst = snapshotNeed - PERSIST_HOLD_DAYS - PERSIST_LOOKBACK_DAYS;
+  const startFirst = PERSIST_RETURN_DAYS;
   const startLast = snapshotNeed - PERSIST_HOLD_DAYS - 1;
   for (let i = startFirst; i <= startLast; i++) {
     const startSnap = latestArr[i];
@@ -931,7 +936,7 @@ async function calculatePersistence(anchorDate, progress) {
     let remain = 0;
     top20Start.forEach(code => { if (top20Future.has(code)) remain++; });
     const rate = top20Start.size ? remain / top20Start.size * 100 : null;
-    // 每一列的市場近月漲跌，以右側「10日後日期」為準，
+    // 每一列的市場近月漲跌，以右側「5日後日期」為準，
     // 使用該日期全部去重股票的「近一個月漲幅」平均，不共用最新日期的數值。
     const marketMonth = calcSnapshotMarketMonthChange(futureSnap);
     rows.push({ startDate: startSnap.date, futureDate: futureSnap.date, sample: top20Start.size, remain, rate, marketMonth });
@@ -974,7 +979,7 @@ function calcMarketOneMonthChange(snapshots, endIndex) {
   }
 
   // 舊格式若沒有「近一個月漲幅」欄位，才退回用20個交易日價格自行計算。
-  const prior = snapshots[end - PERSIST_RETURN_DAYS * 2];
+  const prior = snapshots[end - 20];
   if (!prior) return null;
   for (const [code, cur] of latest.prices.entries()) {
     const old = prior.prices.get(code);
@@ -1011,8 +1016,8 @@ function renderPersistence(result, forceStatus) {
     document.getElementById('persist-signal').textContent = '—';
     document.getElementById('persist-updated').textContent = '資料尚未完成';
     document.getElementById('persist-market-month').textContent = '—';
-    document.getElementById('persist-market-note').textContent = '至少需要21個有效交易日分頁';
-    note.textContent = '目前可讀取的歷史快照不足以完成「10日報酬＋10日後持續Top20%」的近10期觀測。';
+    document.getElementById('persist-market-note').textContent = '至少需要20個有效交易日分頁';
+    note.textContent = '目前可讀取的歷史快照不足20份，無法完成「5日報酬＋5日後持續Top20%」的近10期觀測；系統已嘗試往更早日期遞補。';
     return;
   }
 
@@ -1068,7 +1073,7 @@ function renderPersistence(result, forceStatus) {
   if (marketMonth !== null) document.getElementById('persist-market-card').classList.add(marketMonth.avgReturn > 0 ? 'persist-good' : marketMonth.avgReturn < 0 ? 'persist-weak' : 'persist-mid');
 
   render();
-  note.textContent = '算法：先以「日期＋股票代號」去重；每一期計算 10 日報酬並取前 20%，再與 10 個交易日後的 Top20% 做集合交集。近10期則以最近10個「已可完成 t+10 驗證」的起始日計算；「市場近月漲跌」以每一列右側的10日後日期為準，平均該日期全部去重股票的「近一個月漲幅」。' +
+  note.textContent = '算法：先以「日期＋股票代號」去重；每一期計算 5 日報酬並取前 20%，再與 5 個交易日後的 Top20% 做集合交集。顯示最近10個「已可完成 t+5 驗證」的起始日；若分頁空白或缺漏，自動向更早的有效交易資料遞補。「市場近月漲跌」以每一列右側的5日後日期為準，平均該日期全部去重股票的「近一個月漲幅」。' +
     (forceStatus ? '　剛剛完成手動更新。' : '　頁面會定期自動檢查最新日期分頁。');
 }
 
@@ -1078,7 +1083,7 @@ async function loadPersistence(force = false) {
   if (!loading) return;
   PERSIST_LOADING = true;
   loading.style.display = 'block';
-  loading.innerHTML = '<span class="spin"></span> 正在讀取近40個交易日歷史資料...';
+  loading.innerHTML = '<span class="spin"></span> 正在讀取近20個有效交易日歷史資料（空白日期會往前遞補）...';
   try {
     const anchor = BASE_DATE ? new Date(BASE_DATE) : new Date();
     const result = await calculatePersistence(anchor);
@@ -1130,6 +1135,13 @@ function toggleDedup(el) {
     el.style.background = '';
     el.textContent = '去除重複（保留基本面分高）';
   }
+  render();
+}
+function toggleVolatility(el) {
+  hideSmallExtremeVolatility = !hideSmallExtremeVolatility;
+  el.classList.toggle('on', hideSmallExtremeVolatility);
+  el.style.background = hideSmallExtremeVolatility ? 'rgba(217,119,6,.12)' : '';
+  el.textContent = hideSmallExtremeVolatility ? '隱藏大小波動 ✓' : '隱藏大小波動';
   render();
 }
 function toggleInfo(id, btn) {
@@ -1189,7 +1201,7 @@ function parseStockCSVRows(text){
   const parsed=Papa.parse(text,{header:false,skipEmptyLines:true}), all=parsed.data||[]; if(all.length<2)return[];
   const hdr=all[0],ci={};hdr.forEach((h,i)=>{if(h&&String(h).trim())ci[String(h).trim()]=i;});
   const col=(row,...names)=>{for(const nm of names){if(ci[nm]!==undefined){const v=String(row[ci[nm]]??'').trim();if(v)return v;}}return '';};
-  return all.slice(1).map(row=>{const name=col(row,'名稱');if(!name)return null;const w=col(row,'新聞熱度','類別加權');return{name,code:col(row,'代號'),sector:col(row,'類別')||String(row[0]||'').trim(),newsHeat:n(w),newsHeatRaw:w||'1',fund:n(col(row,'基本面分')),tech:n(col(row,'技術籌碼分')),price:n(col(row,'當日股價')),kline:n(col(row,'K線分')),group:n(col(row,'族群分')),pe:n(col(row,'TTM','本益比')),pe5y:n(col(row,'近5年平均PE','近5年平均pe')),date:col(row,'更新日期','日期'),price_chg:n(col(row,'近一個月漲幅')),news_up:col(row,'漲價'),news_cap:col(row,'產能')};}).filter(Boolean);
+  return all.slice(1).map(row=>{const name=col(row,'名稱');if(!name)return null;const w=col(row,'新聞熱度','類別加權');const monthChange=col(row,'近一個月漲幅');return{name,code:col(row,'代號'),sector:col(row,'類別')||String(row[0]||'').trim(),newsHeat:n(w),newsHeatRaw:w||'1',fund:n(col(row,'基本面分')),tech:n(col(row,'技術籌碼分')),price:n(col(row,'當日股價')),kline:n(col(row,'K線分')),group:n(col(row,'族群分')),pe:n(col(row,'TTM','本益比')),pe5y:n(col(row,'近5年平均PE','近5年平均pe')),date:col(row,'更新日期','日期'),price_chg:n(monthChange),price_chg_raw:monthChange,news_up:col(row,'漲價'),news_cap:col(row,'產能')};}).filter(Boolean);
 }
 
 function applyScoreToStocks(stocks,status,marketReturn){
@@ -1327,7 +1339,7 @@ function buildDailyExportSheet({label,status,marketReturn,stockText,persistence}
   aoa.push([]);
 
   // 完整保留頁面 Top20 表格的所有列與欄位。
-  aoa.push(['日期','市場情況','市場近一個月漲跌','起始日','10日後日期','Top20%樣本','仍在Top20%','延續率','觀測市場近一個月漲跌']);
+  aoa.push(['日期','市場情況','市場近一個月漲跌','起始日','5日後日期','Top20%樣本','仍在Top20%','延續率','觀測市場近一個月漲跌']);
   persistRows.forEach(x=>{
     aoa.push([
       label,status||'',Number.isFinite(marketReturn)?marketReturn.toFixed(2)+'%':'',
