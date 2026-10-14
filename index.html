@@ -229,6 +229,8 @@ th.hist-col{background:rgba(232,150,10,.06);border-left:.5px dashed var(--border
     <div class="chip" id="volatility-btn" onclick="toggleVolatility(this)" title="啟用後，隱藏近一個月漲幅介於 -5% 至 +5%（含），以及漲幅 ≥ +50% 或 ≤ -50% 的股票" style="border-color:#d97706;color:#d97706">隱藏大小波動</div>
     <span class="thr">基本面 ≥ <input type="number" id="thr-fund" step="0.1" min="0" placeholder="—" oninput="render()"></span>
     <span class="thr">技術面 ≥ <input type="number" id="thr-tech" step="0.1" min="0" placeholder="—" oninput="render()"></span>
+    <span class="thr">成交額 &gt; <input type="number" id="thr-turnover" step="100" min="0" placeholder="數值" oninput="updateTurnoverButton();render()" style="width:68px"> 萬</span>
+    <div class="chip" id="turnover-btn" onclick="toggleTurnover(this)" title="輸入日均成交額門檻後，點擊啟用篩選" style="border-color:#0d9488;color:#0d9488">套用成交額篩選</div>
     <div class="chip" id="xls-btn" onclick="openExportDialog()" style="border-color:#1d9e75;color:#1d9e75">⬇ 匯出 Excel</div>
     <input type="date" id="base-date" onchange="setBaseline(this)" title="回測基準日（清空=今日）" style="font-size:12px;padding:4px 8px;border-radius:var(--r);border:.5px solid #7c5cbf;background:var(--bg);color:var(--text);outline:none;cursor:pointer">
     <span id="base-status" style="font-size:11px;color:var(--text3);align-self:center"></span>
@@ -266,8 +268,7 @@ th.hist-col{background:rgba(232,150,10,.06);border-left:.5px dashed var(--border
         <th onclick="sort('pe')">本益比</th>
         <th onclick="sort('pe5y')">近5年平均PE</th>
       <th onclick="sort('price_chg')">近1月漲跌%</th>
-      <th onclick="sort('news_up')">漲價新聞</th>
-      <th onclick="sort('news_cap')">產能新聞</th>
+      <th onclick="sort('avg_turnover')">日均成交額(萬)</th>
       </tr></thead>
       <tbody id="tbl"></tbody>
     </table>
@@ -281,7 +282,7 @@ const MKT_CSV   = "https://docs.google.com/spreadsheets/d/1IgRRZIwKmQ-9T7od3obIQ
 let TSMC_FUND = 0, TSMC_TOTAL = 0; // 動態從資料讀取台積電分數
 
 let STOCKS = [], MKT = { escape:0, charge:0, rows:[] };
-let newsHeatFilter = 'all', aboveOnly = false, dedupMode = false, hideSmallExtremeVolatility = false, sortK = 'total', sortD = -1;
+let newsHeatFilter = 'all', aboveOnly = false, dedupMode = false, hideSmallExtremeVolatility = false, turnoverFilterEnabled = false, sortK = 'total', sortD = -1;
 let compareMode = 'none';
 let BASE_DATE = null;   // 回測基準日（null = 今日即時資料）
 let BASE_LABEL = '';
@@ -560,6 +561,14 @@ function getRows() {
       const monthlyChange = parseFloat(String(r.price_chg_raw).replace(/[^\d.\-]/g, ''));
       if (Number.isFinite(monthlyChange) && ((monthlyChange >= -5 && monthlyChange <= 5) || monthlyChange >= 50 || monthlyChange <= -50)) return false;
     }
+    if (turnoverFilterEnabled) {
+      const turnoverInput = document.getElementById('thr-turnover');
+      const minTurnover = turnoverInput && turnoverInput.value !== '' ? Number(turnoverInput.value) : NaN;
+      // 啟用成交額篩選時，只顯示有成交額資料且嚴格大於門檻的股票。
+      if (Number.isFinite(minTurnover) && minTurnover >= 0) {
+        if (!Number.isFinite(r.avg_turnover) || r.avg_turnover <= minTurnover) return false;
+      }
+    }
     if (aboveOnly && (r.fund < TSMC_FUND || r.total < TSMC_TOTAL)) return false;
     if (minFund !== null && r.fund < minFund) return false;
     if (minTech !== null && r.tech < minTech) return false;
@@ -597,8 +606,7 @@ function buildHead() {
     '<th onclick="sort(\'pe\')">本益比</th>' +
     '<th onclick="sort(\'pe5y\')">近5年平均PE</th>' +
     '<th onclick="sort(\'price_chg\')">近1月漲跌%</th>' +
-    '<th onclick="sort(\'news_up\')">漲價新聞</th>' +
-    '<th onclick="sort(\'news_cap\')">產能新聞</th>' +
+    '<th onclick="sort(\'avg_turnover\')">日均成交額(萬)</th>' +
     '</tr>';
   // restore sort indicator
   document.querySelectorAll('#thead-row th').forEach(th => {
@@ -622,7 +630,7 @@ function render() {
   buildHead();
   const rows = getRows();
   if (!rows.length) {
-    document.getElementById('tbl').innerHTML = '<tr><td colspan="16" style="padding:2rem;text-align:center;color:var(--text3)">沒有符合條件的資料</td></tr>';
+    document.getElementById('tbl').innerHTML = '<tr><td colspan="' + (compareMode !== 'none' ? 15 : 14) + '" style="padding:2rem;text-align:center;color:var(--text3)">沒有符合條件的資料</td></tr>';
     return;
   }
   const maxF   = Math.max(...rows.map(r => r.fund), TSMC_FUND + 1);
@@ -653,8 +661,7 @@ function render() {
       '<td style="color:var(--text2)">' + (r.pe > 0 ? r.pe.toFixed(1) : '—') + '</td>' +
       '<td style="color:var(--text3)">' + (r.pe5y > 0 ? r.pe5y.toFixed(1) : '—') + '</td>' +
       '<td style="font-weight:500;color:' + (r.price_chg > 0 ? 'var(--green)' : r.price_chg < 0 ? 'var(--red)' : 'var(--text3)') + '">' + (r.price_chg !== 0 ? (r.price_chg > 0 ? '+' : '') + r.price_chg.toFixed(1) + '%' : '—') + '</td>' +
-      '<td style="color:var(--text2)">' + (r.news_up > 0 ? r.news_up : '—') + '</td>' +
-      '<td style="color:var(--text2)">' + (r.news_cap > 0 ? r.news_cap : '—') + '</td>' +
+      '<td style="color:var(--text2);text-align:right;font-variant-numeric:tabular-nums">' + (r.avg_turnover > 0 ? r.avg_turnover.toLocaleString('zh-TW', { maximumFractionDigits: 2 }) : '—') + '</td>' +
       '</tr>';
   }).join('');
 }
@@ -1144,6 +1151,37 @@ function toggleVolatility(el) {
   el.textContent = hideSmallExtremeVolatility ? '隱藏大小波動 ✓' : '隱藏大小波動';
   render();
 }
+function updateTurnoverButton() {
+  const btn = document.getElementById('turnover-btn');
+  const input = document.getElementById('thr-turnover');
+  if (!btn || !input) return;
+  const raw = input.value.trim();
+  const value = raw === '' ? NaN : Number(raw);
+  if (turnoverFilterEnabled && Number.isFinite(value) && value >= 0) {
+    btn.textContent = '成交額 > ' + value.toLocaleString('zh-TW', {maximumFractionDigits: 2}) + ' 萬 ✓';
+  } else if (turnoverFilterEnabled) {
+    btn.textContent = '請輸入成交額門檻';
+  } else {
+    btn.textContent = '套用成交額篩選';
+  }
+}
+function toggleTurnover(el) {
+  const input = document.getElementById('thr-turnover');
+  const raw = input ? input.value.trim() : '';
+  const value = raw === '' ? NaN : Number(raw);
+  if (!turnoverFilterEnabled && (!Number.isFinite(value) || value < 0)) {
+    if (input) {
+      input.focus();
+      input.placeholder = '請輸入';
+    }
+    return;
+  }
+  turnoverFilterEnabled = !turnoverFilterEnabled;
+  el.classList.toggle('on', turnoverFilterEnabled);
+  el.style.background = turnoverFilterEnabled ? 'rgba(13,148,136,.12)' : '';
+  updateTurnoverButton();
+  render();
+}
 function toggleInfo(id, btn) {
   const el = document.getElementById(id);
   if (!el) return;
@@ -1198,10 +1236,43 @@ function toggleExportRange(){const r=document.querySelector('input[name="export-
 function closeExportDialog(){if(EXPORT_RUNNING)return;const d=document.getElementById('export-dialog');if(d)d.style.display='none';}
 
 function parseStockCSVRows(text){
-  const parsed=Papa.parse(text,{header:false,skipEmptyLines:true}), all=parsed.data||[]; if(all.length<2)return[];
-  const hdr=all[0],ci={};hdr.forEach((h,i)=>{if(h&&String(h).trim())ci[String(h).trim()]=i;});
-  const col=(row,...names)=>{for(const nm of names){if(ci[nm]!==undefined){const v=String(row[ci[nm]]??'').trim();if(v)return v;}}return '';};
-  return all.slice(1).map(row=>{const name=col(row,'名稱');if(!name)return null;const w=col(row,'新聞熱度','類別加權');const monthChange=col(row,'近一個月漲幅');return{name,code:col(row,'代號'),sector:col(row,'類別')||String(row[0]||'').trim(),newsHeat:n(w),newsHeatRaw:w||'1',fund:n(col(row,'基本面分')),tech:n(col(row,'技術籌碼分')),price:n(col(row,'當日股價')),kline:n(col(row,'K線分')),group:n(col(row,'族群分')),pe:n(col(row,'TTM','本益比')),pe5y:n(col(row,'近5年平均PE','近5年平均pe')),date:col(row,'更新日期','日期'),price_chg:n(monthChange),price_chg_raw:monthChange,news_up:col(row,'漲價'),news_cap:col(row,'產能')};}).filter(Boolean);
+  const parsed=Papa.parse(text,{header:false,skipEmptyLines:true}), all=parsed.data||[];
+  if(all.length<2)return[];
+  const hdr=all[0],ci={};
+  hdr.forEach((h,i)=>{if(h&&String(h).trim())ci[String(h).trim()]=i;});
+  const col=(row,...names)=>{
+    for(const nm of names){
+      if(ci[nm]!==undefined){const v=String(row[ci[nm]]??'').trim();if(v)return v;}
+    }
+    return '';
+  };
+  return all.slice(1).map(row=>{
+    const name=col(row,'名稱');
+    if(!name)return null;
+    const w=col(row,'新聞熱度','類別加權');
+    const monthChange=col(row,'近一個月漲幅');
+    // 優先依欄名讀取；若匯出的表頭沒有標籤，則以試算表 BK 欄（0-based index 62）遞補。
+    const avgTurnoverRaw=col(row,'日均成交額(萬)','日均成交額（萬）') || String(row[62]??'').trim();
+    return {
+      name,
+      code:col(row,'代號'),
+      sector:col(row,'類別')||String(row[0]||'').trim(),
+      newsHeat:n(w),
+      newsHeatRaw:w||'1',
+      fund:n(col(row,'基本面分')),
+      tech:n(col(row,'技術籌碼分')),
+      price:n(col(row,'當日股價')),
+      kline:n(col(row,'K線分')),
+      group:n(col(row,'族群分')),
+      pe:n(col(row,'TTM','本益比')),
+      pe5y:n(col(row,'近5年平均PE','近5年平均pe')),
+      date:col(row,'更新日期','日期'),
+      price_chg:n(monthChange),
+      price_chg_raw:monthChange,
+      avg_turnover:n(avgTurnoverRaw),
+      avg_turnover_raw:avgTurnoverRaw
+    };
+  }).filter(Boolean);
 }
 
 function applyScoreToStocks(stocks,status,marketReturn){
