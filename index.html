@@ -43,6 +43,29 @@ button:hover{background:var(--bg2)}
 .etag-red{background:#fcebeb;color:#a32d2d}
 .etag-gray{background:var(--bg2);color:var(--text2)}
 
+.etag-election{background:rgba(124,92,191,.13);color:#8057b7;border:1px solid rgba(124,92,191,.35);cursor:help;display:inline-flex;align-items:center;gap:5px;outline:none}
+.etag-election:hover,.etag-election:focus{background:rgba(124,92,191,.22);border-color:#8057b7}
+.etag-election .election-mark{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border:1px solid currentColor;border-radius:50%;font-size:9px;line-height:1;font-weight:700}
+.info-pop.election-info-pop{width:min(760px,calc(100vw - 24px));max-width:none;max-height:min(72vh,680px);overflow:auto;padding:14px 16px}
+.election-info-title{font-size:13px;font-weight:700;margin-bottom:4px;color:var(--text)}
+.election-info-note{font-size:11px;color:var(--text2);line-height:1.55;margin-bottom:10px}
+.election-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin:9px 0 12px}
+.election-summary-item{background:var(--bg2);border:1px solid var(--border);border-radius:7px;padding:7px 9px;min-width:0}
+.election-summary-label{font-size:10px;color:var(--text2);margin-bottom:3px}
+.election-summary-value{font-size:14px;font-weight:700;color:var(--text);white-space:nowrap}
+.election-summary-value.positive{color:var(--green)}
+.election-summary-value.negative{color:var(--red)}
+.election-table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:7px}
+.election-info-table{width:100%;min-width:620px;border-collapse:collapse;font-size:11px}
+.election-info-table th{position:sticky;top:0;background:var(--bg2);color:var(--text2);font-weight:600;text-align:left;padding:7px 8px;border-bottom:1px solid var(--border);white-space:nowrap}
+.election-info-table td{padding:7px 8px;border-bottom:1px solid var(--border);white-space:nowrap;color:var(--text)}
+.election-info-table tbody tr:last-child td{border-bottom:0}
+.election-info-table .positive{color:var(--green);font-weight:600}
+.election-info-table .negative{color:var(--red);font-weight:600}
+.election-info-foot{font-size:10px;color:var(--text3);margin-top:8px;line-height:1.5}
+@media(max-width:520px){.election-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.info-pop.election-info-pop{padding:12px}}
+
+
 .persistence{padding:1rem 1.5rem;border-bottom:.5px solid var(--border)}
 .persist-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:.75rem}
 .persist-title{font-size:15px;font-weight:600}
@@ -353,6 +376,91 @@ function fv(row, keys) {
   return '';
 }
 
+// ── 美國總統／期中選舉投資策略（依使用者提供的回測截圖文字化）──
+function electionStrategyHTML() {
+  return `
+    <span class="etag etag-election" tabindex="0" role="button" aria-haspopup="true" aria-controls="election-info"
+      onmouseenter="showElectionInfo(this)" onmouseleave="scheduleHideElectionInfo()"
+      onfocus="showElectionInfo(this)" onblur="scheduleHideElectionInfo()"
+      onclick="toggleElectionInfo(this)" title="滑鼠移入或點擊查看 10 期選舉回測明細">
+      美國總統大選／期中選舉：買入長榮＋儒鴻＋寶雅 <span class="election-mark">i</span>
+    </span>
+    <div id="election-info" class="info-pop election-info-pop" role="tooltip"
+      onmouseenter="cancelHideElectionInfo()" onmouseleave="hideElectionInfo()">
+      <div class="election-info-title">美國總統大選／期中選舉：買入長榮＋儒鴻＋寶雅</div>
+      <div class="election-info-note">歷屆選前一個月投資組合績效明細，共 10 屆。組合配置：長榮 34%、儒鴻 33%、寶雅 33%。下表保留截圖所示的個股漲跌幅及投資組合整體漲跌幅。</div>
+      <div class="election-summary">
+        <div class="election-summary-item"><div class="election-summary-label">總筆數</div><div class="election-summary-value">10</div></div>
+        <div class="election-summary-item"><div class="election-summary-label">戰績（勝－敗－平）</div><div class="election-summary-value">8－2－0</div></div>
+        <div class="election-summary-item"><div class="election-summary-label">勝率</div><div class="election-summary-value">80.00%</div></div>
+        <div class="election-summary-item"><div class="election-summary-label">單次期望值</div><div class="election-summary-value positive">+4.86%</div></div>
+        <div class="election-summary-item"><div class="election-summary-label">平均獲利（8 勝）</div><div class="election-summary-value positive">+6.42%</div></div>
+        <div class="election-summary-item"><div class="election-summary-label">平均虧損（2 敗）</div><div class="election-summary-value negative">-1.39%</div></div>
+        <div class="election-summary-item"><div class="election-summary-label">賺賠比</div><div class="election-summary-value">4.61</div></div>
+        <div class="election-summary-item"><div class="election-summary-label">配置比例</div><div class="election-summary-value">34／33／33%</div></div>
+      </div>
+      <div class="election-table-wrap">
+        <table class="election-info-table">
+          <thead><tr><th>選舉類型</th><th>選舉日期</th><th>長榮（34%）</th><th>儒鴻（33%）</th><th>寶雅（33%）</th><th>投資組合整體漲跌幅</th></tr></thead>
+          <tbody>
+            <tr><td>2008 總統大選</td><td>2008-11-04</td><td class="positive">+25.17%</td><td>0.00%</td><td>0.00%</td><td class="positive">+8.56%</td></tr>
+            <tr><td>2010 期中選舉</td><td>2010-11-02</td><td class="positive">+16.46%</td><td class="negative">-10.25%</td><td class="negative">-8.70%</td><td class="negative">-0.65%</td></tr>
+            <tr><td>2012 總統大選</td><td>2012-11-06</td><td class="positive">+5.19%</td><td class="positive">+13.77%</td><td class="negative">-2.14%</td><td class="positive">+5.60%</td></tr>
+            <tr><td>2014 期中選舉</td><td>2014-11-04</td><td class="negative">-0.83%</td><td class="positive">+5.12%</td><td class="positive">+5.71%</td><td class="positive">+3.29%</td></tr>
+            <tr><td>2016 總統大選</td><td>2016-11-08</td><td class="negative">-4.14%</td><td class="negative">-3.07%</td><td class="positive">+0.87%</td><td class="negative">-2.13%</td></tr>
+            <tr><td>2018 期中選舉</td><td>2018-11-06</td><td class="negative">-9.21%</td><td class="positive">+2.44%</td><td class="positive">+13.54%</td><td class="positive">+2.14%</td></tr>
+            <tr><td>2020 總統大選</td><td>2020-11-03</td><td class="positive">+17.00%</td><td class="positive">+9.76%</td><td class="positive">+10.91%</td><td class="positive">+12.60%</td></tr>
+            <tr><td>2022 期中選舉</td><td>2022-11-08</td><td class="negative">-5.45%</td><td class="positive">+9.30%</td><td class="positive">+14.88%</td><td class="positive">+6.12%</td></tr>
+            <tr><td>2024 總統大選</td><td>2024-11-05</td><td class="positive">+15.69%</td><td class="negative">-0.37%</td><td class="negative">-8.58%</td><td class="positive">+2.38%</td></tr>
+            <tr><td>2026 期中選舉</td><td>2026-11-03</td><td class="positive">+13.65%</td><td class="positive">+12.57%</td><td class="positive">+5.67%</td><td class="positive">+10.66%</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="election-info-foot">資料來源：使用者提供的回測截圖。這裡僅將截圖數值轉為文字呈現，未重新計算或驗證原始股價與報酬期間。</div>
+    </div>`;
+}
+
+let electionInfoHideTimer = null;
+function positionElectionInfo(trigger) {
+  const pop = document.getElementById('election-info');
+  if (!pop || !trigger) return;
+  const rect = trigger.getBoundingClientRect();
+  const margin = 10;
+  let left = rect.left;
+  let top = rect.bottom + 8;
+  const maxLeft = window.innerWidth - pop.offsetWidth - margin;
+  left = Math.max(margin, Math.min(left, maxLeft));
+  if (top + pop.offsetHeight > window.innerHeight - margin) top = rect.top - pop.offsetHeight - 8;
+  if (top < margin) top = margin;
+  pop.style.left = left + 'px';
+  pop.style.top = top + 'px';
+}
+function showElectionInfo(trigger) {
+  cancelHideElectionInfo();
+  const pop = document.getElementById('election-info');
+  if (!pop) return;
+  document.querySelectorAll('.info-pop.show').forEach(x => { if (x !== pop) x.classList.remove('show'); });
+  pop.classList.add('show');
+  positionElectionInfo(trigger);
+}
+function hideElectionInfo() {
+  cancelHideElectionInfo();
+  const pop = document.getElementById('election-info');
+  if (pop) pop.classList.remove('show');
+}
+function scheduleHideElectionInfo() {
+  cancelHideElectionInfo();
+  electionInfoHideTimer = setTimeout(hideElectionInfo, 220);
+}
+function cancelHideElectionInfo() {
+  if (electionInfoHideTimer) clearTimeout(electionInfoHideTimer);
+  electionInfoHideTimer = null;
+}
+function toggleElectionInfo(trigger) {
+  // 點擊（含觸控）時直接顯示；點擊其他位置會由共用事件收起。
+  showElectionInfo(trigger);
+}
+
 // ── 貨幣市場 ──
 function loadMkt() {
   fetch(MKT_CSV)
@@ -401,7 +509,8 @@ function loadMkt() {
         if (ind === '匯率')     tags.push({ t: '匯率 ' + val, cls: 'etag-gray' });
       });
       document.getElementById('env-row').innerHTML = tags
-        .map(t => '<span class="etag ' + t.cls + '">' + t.t + '</span>').join('');
+        .map(t => '<span class="etag ' + t.cls + '">' + t.t + '</span>').join('')
+        + electionStrategyHTML();
     })
     .catch(() => renderMktFallback());
 }
@@ -411,7 +520,7 @@ function renderMktFallback() {
     const v = document.getElementById('blk-' + i + '-val');
     if (v) v.textContent = '無法讀取';
   }
-  document.getElementById('env-row').innerHTML = '<span class="etag etag-gray">貨幣市場表讀取失敗</span>';
+  document.getElementById('env-row').innerHTML = '<span class="etag etag-gray">貨幣市場表讀取失敗</span>' + electionStrategyHTML();
 }
 
 // ── 產業資料 ──
@@ -1178,7 +1287,7 @@ function toggleInfo(id, btn) {
 }
 
 document.addEventListener('click', function(e) {
-  if (!e.target.closest('.info-btn') && !e.target.closest('.info-pop')) {
+  if (!e.target.closest('.info-btn') && !e.target.closest('.info-pop') && !e.target.closest('.etag-election')) {
     document.querySelectorAll('.info-pop.show').forEach(x => x.classList.remove('show'));
   }
 });
@@ -1186,7 +1295,6 @@ document.addEventListener('click', function(e) {
 window.addEventListener('resize', function() {
   document.querySelectorAll('.info-pop.show').forEach(x => x.classList.remove('show'));
 });
-
 let EXPORT_RUNNING = false;
 function yieldToUI(){ return new Promise(resolve => setTimeout(resolve, 0)); }
 function updateExportProgress(done,total,current,stage,detail){
@@ -1546,6 +1654,8 @@ document.addEventListener('visibilitychange', function(){
   if (!document.hidden) maybeAutoRefresh();
 });
 
+// 先顯示選舉策略標籤，不必等待貨幣市場 CSV 完成載入。
+document.getElementById('env-row').innerHTML = electionStrategyHTML();
 loadMkt();
 loadStocks();
 loadPersistence(false);
