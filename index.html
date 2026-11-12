@@ -186,6 +186,7 @@ th.hist-col{background:rgba(232,150,10,.06);border-left:.5px dashed var(--border
     <div>
       <div class="persist-title">近10期 Top20% 強勢股延續</div>
       <div class="persist-sub">先以「日期＋股票代號」去重；每一期計算 5 日報酬，取前 20%；再與 5 個交易日後的 Top20% 做集合交集。顯示最近 10 個「已可完成 t+5 驗證」的起始日；若日期分頁空白或缺漏，會自動往更早的有效交易資料遞補。</div>
+      <div class="persist-sub" id="persist-base-date">計算基準：最新資料</div>
     </div>
     <button class="persist-btn" onclick="loadPersistence(true)">↻ 立即更新</button>
   </div>
@@ -320,6 +321,12 @@ const PERSIST_SHEET_CACHE_MS = 30 * 60 * 1000;
 let PERSIST_DATA = [];
 let PERSIST_LAST_DATE = null;
 let PERSIST_LOADING = false;
+// 請求序號：避免快速切換基準日時，較舊的非同步結果覆蓋新日期。
+let PERSIST_REQUEST_ID = 0;
+let STOCK_LOAD_REQUEST_ID = 0;
+let BASELINE_REQUEST_ID = 0;
+// 只有市場狀態與近月漲跌都確認後，才允許 render 顯示總分。
+let SCORE_READY = false;
 const PERSIST_SHEET_CACHE = new Map();
 let MARKET_STATUS = '盤整'; // 延續 / 盤整；等待近10期延續率計算完成後自動更新
 let MARKET_MONTH_RETURN = null; // 最新已完成起始日的整體市場近一個月平均漲跌
@@ -360,6 +367,53 @@ function recalculateTotals() {
     r.total = (r.fund * fundWeight + r.tech * techWeight) * heatFactor;
     r.scoreMode = severeRange ? '基本面×新聞熱度' : (MARKET_STATUS === '延續' ? '基本面0.7＋技術0.3×新聞熱度' : '基本面0.8＋技術0.2×新聞熱度');
   });
+}
+
+// 總分尚未確認前，隱藏股票表格並顯示讀取狀態。
+function showScoreLoading(message) {
+  SCORE_READY = false;
+  const loading = document.getElementById('stock-loading');
+  const table = document.getElementById('tw');
+
+  if (loading) {
+    loading.style.display = 'block';
+    loading.replaceChildren();
+    const spinner = document.createElement('span');
+    spinner.className = 'spin';
+    loading.append(spinner, document.createTextNode(message || '正在確認總分加權...'));
+  }
+  if (table) table.style.display = 'none';
+}
+
+// 延續率及市場近月漲跌確認後，才重新計算總分並顯示股票表格。
+function finalizeWeightedScores() {
+  if (!STOCKS.length) {
+    showScoreLoading('沒有可用的股票資料，無法計算總分。');
+    return;
+  }
+
+  recalculateTotals();
+
+  const tsmc = STOCKS.find(r => r.code === '2330');
+  if (tsmc) {
+    TSMC_FUND = tsmc.fund;
+    TSMC_TOTAL = tsmc.total;
+  } else {
+    TSMC_FUND = 7.0;
+    TSMC_TOTAL = 11.0;
+  }
+
+  const tsmcBadge = document.querySelector('.badge');
+  if (tsmcBadge && tsmc) {
+    tsmcBadge.textContent = '台積電 基本面' + TSMC_FUND.toFixed(1) + ' 總分' + TSMC_TOTAL.toFixed(1);
+  }
+
+  SCORE_READY = true;
+  const loading = document.getElementById('stock-loading');
+  const table = document.getElementById('tw');
+  if (loading) loading.style.display = 'none';
+  if (table) table.style.display = 'block';
+  render();
 }
 
 const n = v => parseFloat(String(v||'').replace(/[^\d.\-]/g,'')) || 0;
@@ -525,79 +579,80 @@ function renderMktFallback() {
 
 // ── 產業資料 ──
 function processStockCSV(text) {
-      // 用索引模式解析，避免 A 欄空標題造成欄位錯位
-      const rawStocks = parseStockCSVRows(text);
-      STOCKS = rawStocks; // 預設顯示全部，去重改為按鈕控制
-      recalculateTotals(); // 完全不讀取原始 Excel 總分，依市場狀態重算
+  // 用索引模式解析，避免 A 欄空標題造成欄位錯位。
+  STOCKS = parseStockCSVRows(text);
 
-      // 動態讀取台積電（2330）當下分數作為門檻
-      const tsmc = STOCKS.find(r => r.code === '2330');
-      if (tsmc) {
-        TSMC_FUND  = tsmc.fund;
-        TSMC_TOTAL = tsmc.total;
-      } else {
-        TSMC_FUND  = 7.0;  // fallback
-        TSMC_TOTAL = 11.0;
-      }
-      // 更新 UI 上的台積電標準顯示
-      const tsmcBadge = document.querySelector('.badge');
-      if (tsmcBadge && tsmc) {
-        tsmcBadge.textContent = '台積電 基本面' + TSMC_FUND.toFixed(1) + ' 總分' + TSMC_TOTAL.toFixed(1);
-      }
+  // 股票資料讀取完成不代表市場權重已確認；先維持讀取狀態。
+  showScoreLoading('股票資料已讀取，正在計算近10期強勢股延續與市場權重...');
 
-      document.getElementById('stock-loading').style.display = 'none';
-      document.getElementById('tw').style.display = 'block';
+  // 讀更新日期：取所有個股中最新的更新日期。
+  const tsEl = document.getElementById('stock-ts');
+  let latestDate = null, latestStr = '';
+  STOCKS.forEach(r => {
+    const dv = String(r.date || '').trim();
+    const m2 = dv.match(/(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})(?:[\s　]+(\d{1,2}):(\d{2}))?/);
+    if (m2) {
+      const d = new Date(parseInt(m2[1]), parseInt(m2[2])-1, parseInt(m2[3]), parseInt(m2[4]||0), parseInt(m2[5]||0));
+      if (!latestDate || d > latestDate) { latestDate = d; latestStr = dv; }
+    }
+  });
 
-      // 讀 H 欄時間：取所有個股中最新的更新日期
-      const tsEl = document.getElementById('stock-ts');
-      let latestDate = null, latestStr = '';
-      STOCKS.forEach(r => {
-        const dv = String(r.date || '').trim();
-        const m2 = dv.match(/(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})(?:[\s　]+(\d{1,2}):(\d{2}))?/);
-        if (m2) {
-          const d = new Date(parseInt(m2[1]), parseInt(m2[2])-1, parseInt(m2[3]), parseInt(m2[4]||0), parseInt(m2[5]||0));
-          if (!latestDate || d > latestDate) { latestDate = d; latestStr = dv; }
-        }
-      });
-      if (latestDate) {
-        const diffH = (new Date() - latestDate) / 3600000;
-        tsEl.textContent = '資料更新：' + latestStr;
-        tsEl.style.color = diffH > 25 ? 'var(--red)' : 'var(--green)';
-        if (diffH > 25) tsEl.textContent += ' ⚠ 超過1天未更新';
-      } else {
-        const now = new Date();
-        tsEl.textContent = 'Dashboard 載入：' + (now.getMonth()+1) + '/' + now.getDate() + ' ' + now.getHours() + ':' + String(now.getMinutes()).padStart(2,'0');
-        tsEl.style.color = 'var(--text3)';
-      }
+  if (BASE_DATE) {
+    tsEl.textContent = '🕐 回測基準：' + BASE_LABEL;
+    tsEl.style.color = '#e8960a';
+  } else if (latestDate) {
+    const diffH = (new Date() - latestDate) / 3600000;
+    tsEl.textContent = '資料更新：' + latestStr;
+    tsEl.style.color = diffH > 25 ? 'var(--red)' : 'var(--green)';
+    if (diffH > 25) tsEl.textContent += ' ⚠ 超過1天未更新';
+  } else {
+    const now = new Date();
+    tsEl.textContent = 'Dashboard 載入：' + (now.getMonth()+1) + '/' + now.getDate() + ' ' + now.getHours() + ':' + String(now.getMinutes()).padStart(2,'0');
+    tsEl.style.color = 'var(--text3)';
+  }
 
-      render();
-      const now = new Date();
-      document.getElementById('sub').innerHTML = '<span class="dot"></span> 即時同步 · ' + STOCKS.length + ' 檔個股 · ' + (now.getMonth()+1) + '/' + now.getDate();
+  const now = new Date();
+  const modeText = BASE_DATE ? ('回測基準 ' + BASE_LABEL) : ('即時同步 · ' + (now.getMonth()+1) + '/' + now.getDate());
+  document.getElementById('sub').innerHTML = '<span class="dot"></span> ' + modeText + ' · ' + STOCKS.length + ' 檔個股';
 
-      // 動態產生新聞熱度下拉選單（過濾空值）
-      const newsHeatSet = [...new Set(STOCKS.map(r => r.newsHeatRaw).filter(w => w && w !== 'undefined' && w.trim() !== ''))]
-        .sort((a,b) => parseFloat(b) - parseFloat(a));
-      const sel = document.getElementById('w-select');
-      sel.innerHTML = '<option value="all">全部新聞熱度</option>' +
-        newsHeatSet.map(w => '<option value="' + w + '">新聞熱度 ≥ ' + w + '</option>').join('');
-
-      // 回測模式：覆蓋更新時間顯示
-      if (BASE_DATE) {
-        const tsEl2 = document.getElementById('stock-ts');
-        tsEl2.textContent = '🕐 回測基準：' + BASE_LABEL;
-        tsEl2.style.color = '#e8960a';
-      }
+  // 動態產生新聞熱度下拉選單（過濾空值）。
+  const newsHeatSet = [...new Set(STOCKS.map(r => r.newsHeatRaw).filter(w => w && w !== 'undefined' && w.trim() !== ''))]
+    .sort((a,b) => parseFloat(b) - parseFloat(a));
+  const sel = document.getElementById('w-select');
+  sel.innerHTML = '<option value="all">全部新聞熱度</option>' +
+    newsHeatSet.map(w => '<option value="' + w + '">新聞熱度 ≥ ' + w + '</option>').join('');
 }
 
-function loadStocks() {
-  document.getElementById('stock-loading').style.display = 'block';
-  document.getElementById('tw').style.display = 'none';
-  fetch(STOCK_CSV)
-    .then(r => r.text())
-    .then(text => processStockCSV(text))
-    .catch(e => {
-      document.getElementById('stock-loading').textContent = '載入失敗：' + e.message + '　請重新整理';
-    });
+async function loadStocks() {
+  const requestId = ++STOCK_LOAD_REQUEST_ID;
+  // 新的股票載入流程使先前的延續率計算失效。
+  ++PERSIST_REQUEST_ID;
+  showScoreLoading('正在載入股票資料...');
+
+  try {
+    let text;
+    if (BASE_DATE) {
+      const got = await fetchSheetForDate(new Date(BASE_DATE));
+      if (!got) throw new Error('找不到回測基準日的股票資料');
+      if (requestId !== STOCK_LOAD_REQUEST_ID) return;
+      BASE_LABEL = got.sheetName || BASE_LABEL;
+      text = got.text;
+    } else {
+      const resp = await fetch(STOCK_CSV, { cache: 'no-store' });
+      if (!resp.ok) throw new Error('股票資料讀取失敗（HTTP ' + resp.status + '）');
+      text = await resp.text();
+    }
+
+    if (requestId !== STOCK_LOAD_REQUEST_ID) return;
+    processStockCSV(text);
+    if (!STOCKS.length) throw new Error('股票資料沒有可用的個股紀錄');
+
+    // 股票資料讀取完成後，再以相同基準日計算延續率與總分加權。
+    await loadPersistence(true);
+  } catch (e) {
+    if (requestId !== STOCK_LOAD_REQUEST_ID) return;
+    showScoreLoading('載入失敗：' + (e && e.message ? e.message : '未知錯誤') + '　請重新整理');
+  }
 }
 
 // ── 回測模式：以歷史某天為基準 ──
@@ -615,38 +670,74 @@ async function fetchSheetByDate(baseDate) {
 
 async function setBaseline(input) {
   const status = document.getElementById('base-status');
+  const requestId = ++BASELINE_REQUEST_ID;
+  const previousBaseDate = BASE_DATE ? new Date(BASE_DATE) : null;
+  const previousBaseLabel = BASE_LABEL;
+
+  // 日期切換當下即隱藏舊總分，並讓舊的股票／延續率請求失效。
+  ++STOCK_LOAD_REQUEST_ID;
+  ++PERSIST_REQUEST_ID;
+  showScoreLoading('正在切換基準日，重新讀取股票與強勢股歷史資料...');
+
   if (!input.value) {
-    // 清空 → 回到今日即時資料
+    // 清空 → 回到即時資料。
     BASE_DATE = null;
     BASE_LABEL = '';
     status.textContent = '';
-    // 重置對比
-    compareMode = 'none'; HIST = null;
+    compareMode = 'none';
+    HIST = null;
     const cs = document.getElementById('cmp-select');
     if (cs) cs.value = '0';
     document.getElementById('cmp-status').textContent = '';
-    loadStocks();
-    loadPersistence(true);
+    await loadStocks();
     return;
   }
+
   status.textContent = '⏳ 載入歷史資料...';
-  const target = new Date(input.value + 'T12:00:00');
-  const result = await fetchSheetByDate(target);
-  if (!result) {
-    status.textContent = '找不到該日期附近的歷史資料';
-    setTimeout(function(){ status.textContent = ''; }, 3000);
-    return;
+  try {
+    const target = new Date(input.value + 'T12:00:00');
+    const result = await fetchSheetByDate(target);
+
+    // 若使用者已再次選擇其他日期，不採用這次結果。
+    if (requestId !== BASELINE_REQUEST_ID) return;
+
+    if (!result) {
+      BASE_DATE = previousBaseDate;
+      BASE_LABEL = previousBaseLabel;
+      status.textContent = '找不到該日期附近的歷史資料';
+
+      // 還原日期選擇，並重新載入原本基準的資料，避免畫面停留在舊總分或空白。
+      if (previousBaseDate) {
+        const d = previousBaseDate;
+        input.value = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+      } else {
+        input.value = '';
+      }
+      await loadStocks();
+      return;
+    }
+
+    BASE_DATE = result.dateObj;
+    BASE_LABEL = result.sheetName;
+    status.textContent = '';
+
+    // 重置對比（讓使用者重新選，會以新基準日推算）。
+    compareMode = 'none';
+    HIST = null;
+    const cs = document.getElementById('cmp-select');
+    if (cs) cs.value = '0';
+    document.getElementById('cmp-status').textContent = '';
+
+    processStockCSV(result.text);
+    if (!STOCKS.length) throw new Error('指定日期沒有可用的股票資料');
+
+    // 依新基準日重新計算近10期 Top20 延續率及市場權重。
+    await loadPersistence(true);
+  } catch (e) {
+    if (requestId !== BASELINE_REQUEST_ID) return;
+    status.textContent = '基準日載入失敗：' + (e && e.message ? e.message : '未知錯誤');
+    showScoreLoading('基準日資料載入失敗，尚未確認總分加權。');
   }
-  BASE_DATE = result.dateObj;
-  BASE_LABEL = result.sheetName;
-  status.textContent = '';
-  // 重置對比（讓使用者重新選，會以新基準日推算）
-  compareMode = 'none'; HIST = null;
-  const cs = document.getElementById('cmp-select');
-  if (cs) cs.value = '0';
-  document.getElementById('cmp-status').textContent = '';
-  processStockCSV(result.text);
-  loadPersistence(true);
 }
 
 // ── 表格 ──
@@ -740,6 +831,8 @@ function histCell(r, field) {
 }
 
 function render() {
+  // 尚未確認市場狀態及加權係數時，不允許更新／顯示股票總分表格。
+  if (!SCORE_READY) return;
   buildHead();
   const rows = getRows();
   if (!rows.length) {
@@ -933,10 +1026,11 @@ function persistenceSignal(rate) {
   return { text: '盤整', cls: 'persist-weak' };
 }
 
-async function collectTradingSnapshots(anchorDate, count, progress) {
+async function collectTradingSnapshots(anchorDate, count, progress, shouldContinue) {
   const found = [];
   const cursor = new Date(anchorDate);
   for (let extra = 0; extra < 180 && found.length < count; extra++) {
+    if (shouldContinue && !shouldContinue()) return [];
     const d = new Date(cursor);
     d.setDate(cursor.getDate() - extra);
     const dow = d.getDay();
@@ -1035,11 +1129,12 @@ function calcSnapshotMarketMonthChange(snapshot) {
   };
 }
 
-async function calculatePersistence(anchorDate, progress) {
+async function calculatePersistence(anchorDate, progress, shouldContinue) {
   const snapshotNeed = PERSIST_SNAPSHOT_NEED;
   const latestArr = await collectTradingSnapshots(anchorDate, snapshotNeed, (done, total, d, stage) => {
     if (progress) progress({ kind:'snapshot', done, total, date:d, stage });
-  });
+  }, shouldContinue);
+  if (shouldContinue && !shouldContinue()) return null;
   if (latestArr.length < snapshotNeed) {
     return { rows: [], latestAvailable: latestArr.length ? latestArr[latestArr.length - 1].date : null, snapshotCount: latestArr.length };
   }
@@ -1048,6 +1143,7 @@ async function calculatePersistence(anchorDate, progress) {
   const startFirst = PERSIST_RETURN_DAYS;
   const startLast = snapshotNeed - PERSIST_HOLD_DAYS - 1;
   for (let i = startFirst; i <= startLast; i++) {
+    if (shouldContinue && !shouldContinue()) return null;
     const startSnap = latestArr[i];
     const priorSnap = latestArr[i - PERSIST_RETURN_DAYS];
     const futureSnap = latestArr[i + PERSIST_HOLD_DAYS];
@@ -1129,15 +1225,38 @@ function renderPersistence(result, forceStatus) {
   if (!tbody) return;
 
   loading.style.display = 'none';
-  if (!result.rows.length) {
+
+  const baseDateLabel = document.getElementById('persist-base-date');
+  if (baseDateLabel) {
+    const baseText = BASE_DATE ? ('回測基準：' + BASE_LABEL) : '即時基準';
+    const actualDate = result && result.latestAvailable ? fmtDateObj(result.latestAvailable) : '無可用日期';
+    baseDateLabel.textContent = baseText + '｜歷史資料截至：' + actualDate;
+  }
+
+  if (!result || !result.rows || !result.rows.length) {
     wrap.style.display = 'none';
+    tbody.innerHTML = '';
+    PERSIST_DATA = [];
+    PERSIST_LAST_DATE = result ? result.latestAvailable : null;
+    MARKET_STATUS = '盤整';
+    MARKET_MONTH_RETURN = null;
+
     document.getElementById('persist-latest').textContent = '—';
+    document.getElementById('persist-latest-note').textContent = '資料不足';
     document.getElementById('persist-avg').textContent = '—';
+    document.getElementById('persist-avg-note').textContent = '無法完成近10期觀測';
     document.getElementById('persist-signal').textContent = '—';
     document.getElementById('persist-updated').textContent = '資料尚未完成';
     document.getElementById('persist-market-month').textContent = '—';
     document.getElementById('persist-market-note').textContent = '至少需要20個有效交易日分頁';
-    note.textContent = '目前可讀取的歷史快照不足20份，無法完成「5日報酬＋5日後持續Top20%」的近10期觀測；系統已嘗試往更早日期遞補。';
+
+    ['persist-latest-card','persist-avg-card','persist-signal-card','persist-market-card'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.classList.remove('persist-good','persist-mid','persist-weak');
+    });
+
+    note.textContent = '目前可讀取的歷史快照不足20份，無法完成「5日報酬＋5日後持續Top20%」的近10期觀測；系統已嘗試往更早日期遞補。因此暫不顯示股票總分，避免沿用其他基準日的加權結果。';
+    showScoreLoading('歷史資料不足，無法確認近10期延續率與市場狀態，總分暫不顯示。');
     return;
   }
 
@@ -1159,27 +1278,20 @@ function renderPersistence(result, forceStatus) {
   const rates = result.rows.map(r => r.rate).filter(Number.isFinite);
   const latest = result.rows[result.rows.length - 1];
   const avg = rates.length ? rates.reduce((a,b) => a+b, 0) / rates.length : null;
-  // 這張卡與 Top20 表格皆顯示「最新有效交易日」的近一個月市場漲跌。
+  // 市場近月漲跌依目前基準日的最新有效歷史快照計算。
   const marketMonth = result.currentMarketMonth || null;
-  MARKET_MONTH_RETURN = marketMonth ? marketMonth.avgReturn : null;
+  MARKET_MONTH_RETURN = marketMonth && Number.isFinite(marketMonth.avgReturn) ? marketMonth.avgReturn : null;
 
   document.getElementById('persist-latest').textContent = latest.rate === null ? '—' : latest.rate.toFixed(1) + '%';
   document.getElementById('persist-latest-note').textContent = latest.startDate ? (fmtDateObj(latest.startDate) + ' → ' + fmtDateObj(latest.futureDate) + '，' + latest.remain + '/' + latest.sample + ' 留存') : '';
   document.getElementById('persist-avg').textContent = avg === null ? '—' : avg.toFixed(1) + '%';
   document.getElementById('persist-avg-note').textContent = '取最近 ' + rates.length + ' 期完成觀測的平均';
+
   const signal = persistenceSignal(avg);
   MARKET_STATUS = signal.text;
-  recalculateTotals();
-  const tsmcUpdated = STOCKS.find(r => r.code === '2330');
-  if (tsmcUpdated) {
-    TSMC_FUND = tsmcUpdated.fund;
-    TSMC_TOTAL = tsmcUpdated.total;
-    const tsmcBadge = document.querySelector('.badge');
-    if (tsmcBadge) tsmcBadge.textContent = '台積電 基本面' + TSMC_FUND.toFixed(1) + ' 總分' + TSMC_TOTAL.toFixed(1);
-  }
   document.getElementById('persist-signal').textContent = signal.text;
   document.getElementById('persist-updated').textContent = avg === null ? '資料尚未完成' : ('近10期平均延續率 ' + avg.toFixed(1) + '%');
-  document.getElementById('persist-market-month').textContent = marketMonth === null ? '—' : (marketMonth.avgReturn >= 0 ? '+' : '') + marketMonth.avgReturn.toFixed(2) + '%';
+  document.getElementById('persist-market-month').textContent = MARKET_MONTH_RETURN === null ? '—' : (MARKET_MONTH_RETURN >= 0 ? '+' : '') + MARKET_MONTH_RETURN.toFixed(2) + '%';
   document.getElementById('persist-market-note').textContent = marketMonth === null ? '等待資料' : '最新日 ' + fmtDateObj(marketMonth.endDate) + '，' + marketMonth.count + ' 檔去重股票的「近一個月漲幅」平均';
 
   const cards = ['persist-latest-card','persist-avg-card','persist-signal-card','persist-market-card'];
@@ -1190,31 +1302,47 @@ function renderPersistence(result, forceStatus) {
   if (latest.rate !== null) document.getElementById('persist-latest-card').classList.add(latest.rate >= 60 ? 'persist-good' : latest.rate >= 40 ? 'persist-mid' : 'persist-weak');
   if (avg !== null) document.getElementById('persist-avg-card').classList.add(avg >= 60 ? 'persist-good' : avg >= 40 ? 'persist-mid' : 'persist-weak');
   if (avg !== null) document.getElementById('persist-signal-card').classList.add(signal.cls || 'persist-mid');
-  if (marketMonth !== null) document.getElementById('persist-market-card').classList.add(marketMonth.avgReturn > 0 ? 'persist-good' : marketMonth.avgReturn < 0 ? 'persist-weak' : 'persist-mid');
+  if (MARKET_MONTH_RETURN !== null) document.getElementById('persist-market-card').classList.add(MARKET_MONTH_RETURN > 0 ? 'persist-good' : MARKET_MONTH_RETURN < 0 ? 'persist-weak' : 'persist-mid');
 
-  render();
-  note.textContent = '算法：先以「日期＋股票代號」去重；每一期計算 5 日報酬並取前 20%，再與 5 個交易日後的 Top20% 做集合交集。顯示最近10個「已可完成 t+5 驗證」的起始日；若分頁空白或缺漏，自動向更早的有效交易資料遞補。「市場近月漲跌」以每一列右側的5日後日期為準，平均該日期全部去重股票的「近一個月漲幅」。' +
+  // 兩項必要輸入都有效後，才可計算總分：近10期平均延續率與市場近一個月漲跌。
+  if (Number.isFinite(avg) && Number.isFinite(MARKET_MONTH_RETURN) && signal.text !== '—') {
+    finalizeWeightedScores();
+  } else {
+    showScoreLoading('延續率或市場近月漲跌資料不足，尚無法確認總分加權。');
+  }
+
+  note.textContent = '算法：先以「日期＋股票代號」去重；每一期計算 5 日報酬並取前 20%，再與 5 個交易日後的 Top20% 做集合交集。顯示最近10個「已可完成 t+5 驗證」的起始日；若分頁空白或缺漏，自動向更早的有效交易資料遞補。「市場近月漲跌」以目前基準日的最新有效歷史快照為準，平均該日期全部去重股票的「近一個月漲幅」。' +
     (forceStatus ? '　剛剛完成手動更新。' : '　頁面會定期自動檢查最新日期分頁。');
 }
 
 async function loadPersistence(force = false) {
-  if (PERSIST_LOADING) return;
+  const requestId = ++PERSIST_REQUEST_ID;
   const loading = document.getElementById('persist-loading');
   if (!loading) return;
+
   PERSIST_LOADING = true;
+  showScoreLoading('正在確認近10期強勢股延續與總分加權...');
   loading.style.display = 'block';
   loading.innerHTML = '<span class="spin"></span> 正在讀取近20個有效交易日歷史資料（空白日期會往前遞補）...';
+
+  // 固定這次請求的基準日，避免計算途中被其他日期的變更影響。
+  const anchor = BASE_DATE ? new Date(BASE_DATE) : new Date();
+  const shouldContinue = () => requestId === PERSIST_REQUEST_ID;
+
   try {
-    const anchor = BASE_DATE ? new Date(BASE_DATE) : new Date();
-    const result = await calculatePersistence(anchor);
+    const result = await calculatePersistence(anchor, null, shouldContinue);
+    if (!shouldContinue() || !result) return;
+
     PERSIST_DATA = result.rows;
     PERSIST_LAST_DATE = result.latestAvailable;
     renderPersistence(result, force);
   } catch (e) {
+    if (!shouldContinue()) return;
     loading.style.display = 'block';
-    loading.innerHTML = '強勢股延續計算失敗：' + (e && e.message ? e.message : '未知錯誤');
+    loading.textContent = '強勢股延續計算失敗：' + (e && e.message ? e.message : '未知錯誤');
+    showScoreLoading('強勢股延續計算失敗，無法確認總分加權。');
   } finally {
-    PERSIST_LOADING = false;
+    if (shouldContinue()) PERSIST_LOADING = false;
   }
 }
 
@@ -1636,8 +1764,8 @@ async function runExportExcel(){
 
 function reloadAll() {
   loadMkt();
+  // loadStocks 完成後會自動依目前基準日重新計算延續率與總分。
   loadStocks();
-  loadPersistence(true);
 }
 
 // 每15分鐘檢查一次最新日期分頁；新增日期分頁後，下一次檢查即會自動納入。
@@ -1658,7 +1786,6 @@ document.addEventListener('visibilitychange', function(){
 document.getElementById('env-row').innerHTML = electionStrategyHTML();
 loadMkt();
 loadStocks();
-loadPersistence(false);
 </script>
 </body>
 </html>
