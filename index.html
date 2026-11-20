@@ -143,6 +143,50 @@ th.hist-col{background:rgba(232,150,10,.06);border-left:.5px dashed var(--border
 .info-pop{position:fixed;z-index:10001;display:none;max-width:min(430px,calc(100vw - 24px));padding:11px 13px;border:1px solid var(--border2);border-radius:10px;background:var(--bg);color:var(--text);box-shadow:0 10px 30px rgba(0,0,0,.18);font-size:11px;line-height:1.6;white-space:normal}
 .info-pop.show{display:block}
 .info-pop b{font-weight:700}
+
+/* ── 0050 預警監控 ── */
+.alert0050{padding:1rem 1.5rem;border-bottom:.5px solid var(--border)}
+.alert0050-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:.75rem}
+.alert0050-title-wrap{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.alert0050-title{font-size:15px;font-weight:600}
+.alert0050-meta{font-size:11px;color:var(--text2);display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.alert0050-pill{font-size:11px;padding:2px 9px;border-radius:12px;background:var(--bg2);color:var(--text2);border:.5px solid var(--border)}
+.alert0050-pill strong{color:var(--text);font-weight:600}
+.alert0050-help{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:3px 9px;border-radius:12px;border:.5px solid var(--border2);background:var(--bg2);color:var(--text2);cursor:help;user-select:none}
+.alert0050-help:hover,.alert0050-help:focus{background:var(--bg3);color:var(--text);border-color:var(--blue)}
+.alert0050-help-icon{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;border:1px solid currentColor;font-size:9px;font-weight:700;line-height:1}
+.info-pop.alert0050-pop{width:min(680px,calc(100vw - 24px));max-width:none;max-height:min(78vh,720px);overflow:auto;padding:14px 16px}
+.alert0050-pop-title{font-size:13px;font-weight:700;margin-bottom:8px;color:var(--text)}
+.alert0050-pop-item{margin-bottom:8px;padding-bottom:8px;border-bottom:.5px solid var(--border)}
+.alert0050-pop-item:last-child{margin-bottom:0;padding-bottom:0;border-bottom:none}
+.alert0050-pop-item b{display:block;font-size:11.5px;color:var(--blue);margin-bottom:3px}
+.alert0050-pop-item p{font-size:11px;color:var(--text2);line-height:1.55;margin:0}
+.alert0050-perf-wrap{margin-top:6px;overflow-x:auto;border:.5px solid var(--border);border-radius:7px;background:var(--bg)}
+.alert0050-perf-table{width:100%;min-width:520px;border-collapse:collapse;font-size:11px}
+.alert0050-perf-table th{padding:6px 8px;text-align:left;font-weight:600;color:var(--text2);background:var(--bg2);border-bottom:.5px solid var(--border);white-space:nowrap}
+.alert0050-perf-table td{padding:6px 8px;border-bottom:.5px solid var(--border);color:var(--text);white-space:nowrap}
+.alert0050-perf-table tr:last-child td{border-bottom:none}
+.alert0050-perf-table .pos{color:var(--green);font-weight:600}
+.alert0050-perf-table .neg{color:var(--red);font-weight:600}
+.alert0050-perf-note{font-size:10px;color:var(--text3);margin-top:5px;line-height:1.5}
+.alert0050-grid{display:grid;grid-template-columns:1.35fr 1fr;gap:10px;align-items:stretch}
+.alert0050-box{border:.5px solid var(--border);border-radius:var(--rl);background:var(--bg2);padding:10px 12px;display:flex;flex-direction:column}
+.alert0050-box-title{font-size:11px;font-weight:600;color:var(--text2);margin-bottom:7px;display:flex;align-items:center;justify-content:space-between;gap:6px}
+.alert0050-table-wrap{overflow-x:auto;border:.5px solid var(--border);border-radius:var(--r);background:var(--bg);flex:1}
+.alert0050-table{width:100%;border-collapse:collapse;font-size:11.5px}
+.alert0050-table th{padding:6px 9px;text-align:left;font-size:10.5px;font-weight:600;color:var(--text2);background:var(--bg2);border-bottom:.5px solid var(--border);white-space:nowrap;position:static}
+.alert0050-table td{padding:6px 9px;border-bottom:.5px solid var(--border);white-space:nowrap;position:static;background:transparent!important}
+.alert0050-table tr:last-child td{border-bottom:none}
+.alert0050-badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10.5px;font-weight:600}
+.alert0050-badge-sell{background:rgba(216,90,48,.14);color:var(--red);border:.5px solid rgba(216,90,48,.35)}
+.alert0050-badge-buy{background:rgba(29,158,117,.14);color:var(--green);border:.5px solid rgba(29,158,117,.35)}
+.alert0050-status-ok{color:var(--green);font-weight:600}
+.alert0050-status-warn{color:var(--gold);font-weight:600}
+.alert0050-status-danger{color:var(--red);font-weight:600}
+.alert0050-status-neutral{color:var(--text3)}
+.alert0050-reason{font-size:10.5px;color:var(--text2);white-space:normal;min-width:150px}
+@media(max-width:960px){.alert0050-grid{grid-template-columns:1fr}}
+
 </style>
 </head>
 <body>
@@ -178,6 +222,166 @@ th.hist-col{background:rgba(232,150,10,.06);border-left:.5px dashed var(--border
   </div>
   <div class="env-row" id="env-row">
     <span class="etag etag-gray"><span class="spin" style="width:12px;height:12px;border-width:1.5px"></span> 讀取環境資料...</span>
+  </div>
+</div>
+
+
+<div class="alert0050" id="alert0050-section">
+  <div class="alert0050-head">
+    <div class="alert0050-title-wrap">
+      <div class="alert0050-title">0050 均線預警與建議操作</div>
+      <span class="alert0050-help" tabindex="0" role="button" aria-haspopup="true" aria-controls="alert0050-info"
+        onmouseenter="showAlert0050Info(this)" onmouseleave="scheduleHideAlert0050Info()"
+        onfocus="showAlert0050Info(this)" onblur="scheduleHideAlert0050Info()"
+        onclick="toggleAlert0050Info(this)">
+        <span class="alert0050-help-icon">i</span> 訊號規則與績效比較
+      </span>
+    </div>
+    <div class="alert0050-meta" id="alert0050-meta">
+      <span class="alert0050-pill">最新交易日 / 收盤價：<strong id="a0050-latest-px">2026/11/20 ｜ 84.45</strong></span>
+      <span class="alert0050-pill">最後更新：<strong id="a0050-updated">2026-11-20 7:30:50</strong></span>
+    </div>
+  </div>
+
+  <div id="alert0050-info" class="info-pop alert0050-pop" role="tooltip"
+    onmouseenter="cancelHideAlert0050Info()" onmouseleave="hideAlert0050Info()">
+    <div class="alert0050-pop-title">0050 均線階梯策略原則與績效比較</div>
+    <div class="alert0050-pop-item">
+      <b>賣出原則</b>
+      <p>一般狀態下，收盤連續跌破 SMA120（9日）、SMA240（2日）、SMA600（3日）或 SMA1200（2日）即觸發賣出；當年線（SMA240）正乖離 &gt; 30% 時，額外啟動 SMA20 保護（連續跌破 3 日停利賣出）。</p>
+    </div>
+    <div class="alert0050-pop-item">
+      <b>買入原則</b>
+      <p>(1) 階梯支撐買點：當日最低價觸及任一長均線（SMA120 / 240 / 600 / 1200）且收盤站上該均線；(2) 突破站回買點：昨日收盤低於均線（含高乖離時的 SMA20 或長均線），今日收盤重新站回該均線之上。</p>
+    </div>
+    <div class="alert0050-pop-item">
+      <b>均線策略 vs 買進持有（Buy &amp; Hold）績效與雜訊過濾比較（2013/03/29 – 2026/11/20，共 3,329 個交易日）</b>
+      <div class="alert0050-perf-wrap" id="a0050-perf-wrap">
+        <table class="alert0050-perf-table">
+          <thead>
+            <tr>
+              <th>比較項目</th>
+              <th>0050 均線策略</th>
+              <th>買進持有（Buy &amp; Hold）</th>
+              <th>差異說明</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>總報酬率 / 年化 (CAGR)</strong></td>
+              <td class="pos">+1,160.90% / 20.41%</td>
+              <td>+815.94% / 17.62%</td>
+              <td class="pos">超額報酬 +344.96%（年化 +2.79%）</td>
+            </tr>
+            <tr>
+              <td><strong>最大回撤 (MDD)</strong></td>
+              <td class="pos">-21.30%</td>
+              <td class="neg">-33.95%</td>
+              <td class="pos">回撤幅度縮小 12.65%</td>
+            </tr>
+            <tr>
+              <td><strong>雜訊排除率</strong></td>
+              <td><strong>91.71%</strong>（過濾 3,053 日）</td>
+              <td>0%（全程暴露）</td>
+              <td>全期間僅 276 個訊號日，平均每年進出 3.0 次</td>
+            </tr>
+            <tr>
+              <td><strong>完整波段勝率（共 41 次）</strong></td>
+              <td><strong>46.34%</strong>（19 勝 / 22 敗）</td>
+              <td>單一持有（1 筆）</td>
+              <td>持倉時間佔比 87.2%，大賺小賠結構</td>
+            </tr>
+            <tr>
+              <td><strong>單次平均獲利 / 最大獲利</strong></td>
+              <td class="pos">+18.16% / +65.99%</td>
+              <td>—</td>
+              <td>順勢抱住主升段波段</td>
+            </tr>
+            <tr>
+              <td><strong>單次平均虧損 / 最大虧損</strong></td>
+              <td class="neg">-1.62% / -4.56%</td>
+              <td>—</td>
+              <td>單次期望值 <strong>+7.55%</strong>（盈虧比 11.21）</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="alert0050-perf-note">註：依還原股價收盤執行進出回測（買進訊號進場、賣出訊號出場），滑鼠移入或點擊「訊號規則與績效比較」即顯示。</div>
+    </div>
+  </div>
+
+  <div class="alert0050-grid">
+    <div class="alert0050-box">
+      <div class="alert0050-box-title">
+        <span>各均線週期與連續跌破天數監控</span>
+        <span style="font-size:10px;color:var(--text3)" id="a0050-bias-note">年線乖離率：-6.65%（一般狀態）</span>
+      </div>
+      <div class="alert0050-table-wrap">
+        <table class="alert0050-table">
+          <thead>
+            <tr>
+              <th>均線週期</th>
+              <th>最新均線數值</th>
+              <th>賣出觸發天數 (N)</th>
+              <th>目前連續跌破天數</th>
+              <th>目前狀態</th>
+            </tr>
+          </thead>
+          <tbody id="a0050-ma-tbody">
+            <tr><td><strong>SMA20</strong></td><td>99.58</td><td>3 <span style="color:var(--text3);font-size:10px">(乖離&gt;30%)</span></td><td>25</td><td class="alert0050-status-neutral">未達高乖離保護</td></tr>
+            <tr><td><strong>SMA120</strong></td><td>105.11</td><td>9</td><td>16</td><td class="alert0050-status-danger">已破線（連16日）</td></tr>
+            <tr><td><strong>SMA240</strong></td><td>90.47</td><td>2</td><td>2</td><td class="alert0050-status-danger">觸發賣出</td></tr>
+            <tr><td><strong>SMA600</strong></td><td>64.65</td><td>3</td><td>0</td><td class="alert0050-status-ok">站穩均線上</td></tr>
+            <tr><td><strong>SMA1200</strong></td><td>46.97</td><td>2</td><td>0</td><td class="alert0050-status-ok">站穩均線上</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="alert0050-box">
+      <div class="alert0050-box-title">
+        <span>近 4 次建議操作與建議日期</span>
+        <span style="font-size:10px;color:var(--text3)">僅顯示買進／賣出（依最新倒序）</span>
+      </div>
+      <div class="alert0050-table-wrap">
+        <table class="alert0050-table">
+          <thead>
+            <tr>
+              <th>次序</th>
+              <th>建議日期</th>
+              <th>建議操作</th>
+              <th>觸發依據（收盤價）</th>
+            </tr>
+          </thead>
+          <tbody id="a0050-rec-tbody">
+            <tr>
+              <td><strong>最近第 1 次</strong></td>
+              <td><strong>2026-11-20</strong></td>
+              <td><span class="alert0050-badge alert0050-badge-sell">賣出</span></td>
+              <td class="alert0050-reason">連 2 日跌破 SMA240 (90.47)，收盤 84.45</td>
+            </tr>
+            <tr>
+              <td><strong>最近第 2 次</strong></td>
+              <td><strong>2026-11-11</strong></td>
+              <td><span class="alert0050-badge alert0050-badge-sell">賣出</span></td>
+              <td class="alert0050-reason">連 9 日跌破 SMA120 (105.24)，收盤 103.20</td>
+            </tr>
+            <tr>
+              <td><strong>最近第 3 次</strong></td>
+              <td><strong>2026-11-06</strong></td>
+              <td><span class="alert0050-badge alert0050-badge-buy">買進（階梯支撐）</span></td>
+              <td class="alert0050-reason">最低 87.55 觸及 SMA240 (88.98) 且收盤 92.50 站上</td>
+            </tr>
+            <tr>
+              <td><strong>最近第 4 次</strong></td>
+              <td><strong>2026-08-05</strong></td>
+              <td><span class="alert0050-badge alert0050-badge-buy">買進（突破站回）</span></td>
+              <td class="alert0050-reason">收盤 103.80 重新站回 SMA20 (101.82)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1406,7 +1610,7 @@ function toggleInfo(id, btn) {
 }
 
 document.addEventListener('click', function(e) {
-  if (!e.target.closest('.info-btn') && !e.target.closest('.info-pop') && !e.target.closest('.etag-election')) {
+  if (!e.target.closest('.info-btn') && !e.target.closest('.info-pop') && !e.target.closest('.etag-election') && !e.target.closest('.alert0050-help')) {
     document.querySelectorAll('.info-pop.show').forEach(x => x.classList.remove('show'));
   }
 });
@@ -1759,8 +1963,349 @@ async function runExportExcel(){
   }
 }
 
+
+// ── 0050 均線預警與近 4 次建議操作 ──
+const ALERT0050_CSV = "https://docs.google.com/spreadsheets/d/1K0YlWLOhYTBUEOJsoycGPMxzyzZJr1cygH1rON6JxPE/export?format=csv&gid=1676958486";
+let alert0050HideTimer = null;
+
+function positionAlert0050Info(trigger) {
+  const pop = document.getElementById('alert0050-info');
+  if (!pop || !trigger) return;
+  const rect = trigger.getBoundingClientRect();
+  const margin = 10;
+  let left = rect.left;
+  let top = rect.bottom + 8;
+  const maxLeft = window.innerWidth - pop.offsetWidth - margin;
+  left = Math.max(margin, Math.min(left, maxLeft));
+  if (top + pop.offsetHeight > window.innerHeight - margin) top = rect.top - pop.offsetHeight - 8;
+  if (top < margin) top = margin;
+  pop.style.left = left + 'px';
+  pop.style.top = top + 'px';
+}
+function showAlert0050Info(trigger) {
+  cancelHideAlert0050Info();
+  const pop = document.getElementById('alert0050-info');
+  if (!pop) return;
+  document.querySelectorAll('.info-pop.show').forEach(x => { if (x !== pop) x.classList.remove('show'); });
+  pop.classList.add('show');
+  positionAlert0050Info(trigger);
+}
+function hideAlert0050Info() {
+  cancelHideAlert0050Info();
+  const pop = document.getElementById('alert0050-info');
+  if (pop) pop.classList.remove('show');
+}
+function scheduleHideAlert0050Info() {
+  cancelHideAlert0050Info();
+  alert0050HideTimer = setTimeout(hideAlert0050Info, 220);
+}
+function cancelHideAlert0050Info() {
+  if (alert0050HideTimer) clearTimeout(alert0050HideTimer);
+  alert0050HideTimer = null;
+}
+function toggleAlert0050Info(trigger) {
+  showAlert0050Info(trigger);
+}
+
+function updateAlert0050PerfTable(series, allSignals) {
+  const wrap = document.getElementById('a0050-perf-wrap');
+  if (!wrap || series.length < 2) return;
+
+  const totalDays = series.length;
+  const sigByDt = new Map();
+  allSignals.forEach(s => {
+    if (!sigByDt.has(s.dt)) sigByDt.set(s.dt, []);
+    sigByDt.get(s.dt).push(s);
+  });
+
+  const signalDays = sigByDt.size;
+  const noiseFilteredDays = totalDays - signalDays;
+  const noiseFilteredPct = (noiseFilteredDays / totalDays * 100);
+
+  let inPos = false, entryPx = 0, posDays = 0;
+  const trades = [];
+  const eqStrat = [1.0];
+  const firstPx = series[0].close;
+
+  for (let i = 0; i < totalDays; i++) {
+    const cur = series[i];
+    if (i > 0) {
+      const prevPx = series[i - 1].close;
+      const ret = inPos ? (cur.close / prevPx - 1) : 0;
+      eqStrat.push(eqStrat[eqStrat.length - 1] * (1 + ret));
+    }
+    if (inPos) posDays++;
+
+    const daySigs = sigByDt.get(cur.dt) || [];
+    const hasSell = daySigs.some(s => s.type === 'SELL');
+    const hasBuy  = daySigs.some(s => s.type === 'BUY');
+
+    if (inPos && hasSell) {
+      trades.push((cur.close / entryPx - 1) * 100);
+      inPos = false;
+    } else if (!inPos && hasBuy && !hasSell) {
+      inPos = true;
+      entryPx = cur.close;
+    }
+  }
+
+  const calcMdd = arr => {
+    let peak = arr[0], mdd = 0;
+    for (let i = 0; i < arr.length; i++) {
+      if (arr[i] > peak) peak = arr[i];
+      const dd = (arr[i] - peak) / peak;
+      if (dd < mdd) mdd = dd;
+    }
+    return mdd * 100;
+  };
+
+  const eqBh = series.map(s => s.close / firstPx);
+  const stratTotalPct = (eqStrat[eqStrat.length - 1] - 1) * 100;
+  const bhTotalPct = (eqBh[eqBh.length - 1] - 1) * 100;
+
+  const d0 = new Date(series[0].dt.replace(/\//g, '-'));
+  const d1 = new Date(series[totalDays - 1].dt.replace(/\//g, '-'));
+  const years = Math.max(0.1, (d1 - d0) / (365.25 * 86400000));
+  const stratCagr = (Math.pow(eqStrat[eqStrat.length - 1], 1 / years) - 1) * 100;
+  const bhCagr = (Math.pow(eqBh[eqBh.length - 1], 1 / years) - 1) * 100;
+
+  const stratMdd = calcMdd(eqStrat);
+  const bhMdd = calcMdd(eqBh);
+
+  const wins = trades.filter(p => p > 0);
+  const losses = trades.filter(p => p <= 0);
+  const winRate = trades.length ? (wins.length / trades.length * 100) : 0;
+  const avgWin = wins.length ? (wins.reduce((a, b) => a + b, 0) / wins.length) : 0;
+  const avgLoss = losses.length ? (losses.reduce((a, b) => a + b, 0) / losses.length) : 0;
+  const maxWin = trades.length ? Math.max(...trades) : 0;
+  const maxLoss = trades.length ? Math.min(...trades) : 0;
+  const ev = trades.length ? (trades.reduce((a, b) => a + b, 0) / trades.length) : 0;
+  const rrRatio = avgLoss < 0 ? Math.abs(avgWin / avgLoss) : 0;
+  const diffTotal = stratTotalPct - bhTotalPct;
+  const diffCagr = stratCagr - bhCagr;
+  const mddReduce = Math.abs(bhMdd) - Math.abs(stratMdd);
+
+  wrap.innerHTML =
+    '<table class="alert0050-perf-table">' +
+      '<thead><tr>' +
+        '<th>比較項目</th>' +
+        '<th>0050 均線策略</th>' +
+        '<th>買進持有（Buy &amp; Hold）</th>' +
+        '<th>差異說明</th>' +
+      '</tr></thead>' +
+      '<tbody>' +
+        '<tr>' +
+          '<td><strong>總報酬率 / 年化 (CAGR)</strong></td>' +
+          '<td class="pos">+' + stratTotalPct.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '% / ' + stratCagr.toFixed(2) + '%</td>' +
+          '<td>+' + bhTotalPct.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '% / ' + bhCagr.toFixed(2) + '%</td>' +
+          '<td class="' + (diffTotal >= 0 ? 'pos' : 'neg') + '">超額報酬 ' + (diffTotal >= 0 ? '+' : '') + diffTotal.toFixed(2) + '%（年化 ' + (diffCagr >= 0 ? '+' : '') + diffCagr.toFixed(2) + '%）</td>' +
+        '</tr>' +
+        '<tr>' +
+          '<td><strong>最大回撤 (MDD)</strong></td>' +
+          '<td class="pos">' + stratMdd.toFixed(2) + '%</td>' +
+          '<td class="neg">' + bhMdd.toFixed(2) + '%</td>' +
+          '<td class="pos">回撤幅度縮小 ' + mddReduce.toFixed(2) + '%</td>' +
+        '</tr>' +
+        '<tr>' +
+          '<td><strong>雜訊排除率</strong></td>' +
+          '<td><strong>' + noiseFilteredPct.toFixed(2) + '%</strong>（過濾 ' + noiseFilteredDays.toLocaleString() + ' 日）</td>' +
+          '<td>0%（全程暴露）</td>' +
+          '<td>全期間僅 ' + signalDays + ' 個訊號日，平均每年進出 ' + (trades.length / years).toFixed(1) + ' 次</td>' +
+        '</tr>' +
+        '<tr>' +
+          '<td><strong>完整波段勝率（共 ' + trades.length + ' 次）</strong></td>' +
+          '<td><strong>' + winRate.toFixed(2) + '%</strong>（' + wins.length + ' 勝 / ' + losses.length + ' 敗）</td>' +
+          '<td>單一持有（1 筆）</td>' +
+          '<td>持倉時間佔比 ' + (posDays / totalDays * 100).toFixed(1) + '%，大賺小賠結構</td>' +
+        '</tr>' +
+        '<tr>' +
+          '<td><strong>單次平均獲利 / 最大獲利</strong></td>' +
+          '<td class="pos">+' + avgWin.toFixed(2) + '% / +' + maxWin.toFixed(2) + '%</td>' +
+          '<td>—</td>' +
+          '<td>順勢抱住主升段波段</td>' +
+        '</tr>' +
+        '<tr>' +
+          '<td><strong>單次平均虧損 / 最大虧損</strong></td>' +
+          '<td class="neg">' + avgLoss.toFixed(2) + '% / ' + maxLoss.toFixed(2) + '%</td>' +
+          '<td>—</td>' +
+          '<td>單次期望值 <strong>' + (ev >= 0 ? '+' : '') + ev.toFixed(2) + '%</strong>（盈虧比 ' + rrRatio.toFixed(2) + '）</td>' +
+        '</tr>' +
+      '</tbody>' +
+    '</table>';
+}
+
+function loadAlert0050() {
+  fetch(ALERT0050_CSV, { cache: 'no-store' })
+    .then(r => r.text())
+    .then(text => {
+      const parsed = Papa.parse(text, { header: false, skipEmptyLines: false });
+      const rows = parsed.data || [];
+      if (rows.length < 11) return;
+
+      // 左半部分重點資訊（第 2、3 列）
+      const latestPx = String((rows[1] && rows[1][1]) || '').trim();
+      const updatedTime = String((rows[2] && rows[2][1]) || '').trim();
+      if (latestPx) document.getElementById('a0050-latest-px').textContent = latestPx;
+      if (updatedTime) document.getElementById('a0050-updated').textContent = updatedTime;
+
+      // 解析右側歷史還原股價與均線資料（從第 11 列起，索引 10）
+      const hdr = rows[9] || [];
+      const ci = {};
+      hdr.forEach((h, idx) => { const k = String(h || '').trim(); if (k) ci[k] = idx; });
+      const colIdx = (name, fallback) => ci[name] !== undefined ? ci[name] : fallback;
+      const iDate = colIdx('日期', 0);
+      const iLow  = colIdx('最低價', 3);
+      const iCls  = colIdx('收盤價', 4);
+      const maKeys = ['SMA20', 'SMA120', 'SMA240', 'SMA600', 'SMA1200'];
+      const maIdx = {
+        SMA20: colIdx('SMA20', 5),
+        SMA120: colIdx('SMA120', 6),
+        SMA240: colIdx('SMA240', 7),
+        SMA600: colIdx('SMA600', 8),
+        SMA1200: colIdx('SMA1200', 9)
+      };
+
+      const series = [];
+      for (let r = 10; r < rows.length; r++) {
+        const row = rows[r];
+        if (!row) continue;
+        const dt = String(row[iDate] || '').trim();
+        if (!/^\d{4}[-/]\d{1,2}[-/]\d{1,2}$/.test(dt)) continue;
+        const close = parseFloat(String(row[iCls] || '').replace(/,/g, ''));
+        const low = parseFloat(String(row[iLow] || '').replace(/,/g, ''));
+        if (!Number.isFinite(close)) continue;
+        const item = { dt, close, low };
+        maKeys.forEach(k => {
+          const v = parseFloat(String(row[maIdx[k]] || '').replace(/,/g, ''));
+          item[k] = Number.isFinite(v) ? v : NaN;
+        });
+        series.push(item);
+      }
+
+      // 左側均線監控列（第 5~9 列，索引 4~8）
+      const leftMaRows = [];
+      for (let r = 4; r <= 8; r++) {
+        const row = rows[r] || [];
+        const period = String(row[0] || '').trim();
+        const val = String(row[1] || '').trim();
+        const trigN = parseInt(String(row[2] || '').trim(), 10) || 0;
+        const curBreak = parseInt(String(row[3] || '').trim(), 10) || 0;
+        if (period) leftMaRows.push({ period, val, trigN, curBreak });
+      }
+
+      let latestBias240 = null;
+      if (series.length) {
+        const last = series[series.length - 1];
+        if (Number.isFinite(last.SMA240) && last.SMA240 > 0) {
+          latestBias240 = (last.close - last.SMA240) / last.SMA240;
+          const biasEl = document.getElementById('a0050-bias-note');
+          if (biasEl) {
+            const pct = (latestBias240 * 100).toFixed(2) + '%';
+            biasEl.textContent = '年線乖離率：' + (latestBias240 >= 0 ? '+' : '') + pct +
+              (latestBias240 > 0.30 ? '（>30% 啟動 SMA20 保護）' : '（一般狀態）');
+          }
+        }
+      }
+
+      if (leftMaRows.length) {
+        document.getElementById('a0050-ma-tbody').innerHTML = leftMaRows.map(m => {
+          let statusText = '站穩均線上', statusCls = 'alert0050-status-ok';
+          const nDisplay = m.period === 'SMA20'
+            ? m.trigN + ' <span style="color:var(--text3);font-size:10px">(乖離&gt;30%)</span>'
+            : String(m.trigN);
+          if (m.period === 'SMA20' && !(latestBias240 !== null && latestBias240 > 0.30)) {
+            statusText = m.curBreak > 0 ? '未達高乖離保護' : '站穩均線上';
+            statusCls = m.curBreak > 0 ? 'alert0050-status-neutral' : 'alert0050-status-ok';
+          } else if (m.curBreak === 0) {
+            statusText = '站穩均線上';
+            statusCls = 'alert0050-status-ok';
+          } else if (m.curBreak === m.trigN - 1) {
+            statusText = '賣前預警（連' + m.curBreak + '日）';
+            statusCls = 'alert0050-status-warn';
+          } else if (m.curBreak === m.trigN) {
+            statusText = '觸發賣出';
+            statusCls = 'alert0050-status-danger';
+          } else {
+            statusText = '已破線（連' + m.curBreak + '日）';
+            statusCls = 'alert0050-status-danger';
+          }
+          return '<tr>' +
+            '<td><strong>' + m.period + '</strong></td>' +
+            '<td>' + m.val + '</td>' +
+            '<td>' + nDisplay + '</td>' +
+            '<td>' + m.curBreak + '</td>' +
+            '<td class="' + statusCls + '">' + statusText + '</td>' +
+            '</tr>';
+        }).join('');
+      }
+
+      // 依規則回推歷史訊號（排除賣前預警，僅保留賣出與買進）並取近 4 次建議操作與日期
+      if (series.length) {
+        const nMap = { SMA20: 3, SMA120: 9, SMA240: 2, SMA600: 3, SMA1200: 2 };
+        leftMaRows.forEach(m => { if (nMap[m.period] !== undefined && m.trigN > 0) nMap[m.period] = m.trigN; });
+        const breakCnt = { SMA20: 0, SMA120: 0, SMA240: 0, SMA600: 0, SMA1200: 0 };
+        const allSignals = [];
+
+        for (let i = 0; i < series.length; i++) {
+          const cur = series[i];
+          const prev = i > 0 ? series[i - 1] : null;
+          const bias240 = (Number.isFinite(cur.SMA240) && cur.SMA240 > 0) ? (cur.close - cur.SMA240) / cur.SMA240 : 0;
+
+          maKeys.forEach(ma => {
+            if (!Number.isFinite(cur[ma])) return;
+            if (cur.close < cur[ma]) breakCnt[ma] += 1;
+            else breakCnt[ma] = 0;
+
+            const nReq = nMap[ma];
+            if (ma === 'SMA20') {
+              if (bias240 > 0.30 && breakCnt.SMA20 === nReq) {
+                allSignals.push({ dt: cur.dt, type: 'SELL', action: '賣出', badge: 'alert0050-badge-sell', reason: '高乖離連 ' + breakCnt.SMA20 + ' 日跌破 SMA20 (' + cur.SMA20.toFixed(2) + ')，收盤 ' + cur.close.toFixed(2) });
+              }
+            } else if (breakCnt[ma] === nReq) {
+              allSignals.push({ dt: cur.dt, type: 'SELL', action: '賣出', badge: 'alert0050-badge-sell', reason: '連 ' + breakCnt[ma] + ' 日跌破 ' + ma + ' (' + cur[ma].toFixed(2) + ')，收盤 ' + cur.close.toFixed(2) });
+            }
+          });
+
+          // (1) 階梯支撐買點
+          ['SMA120', 'SMA240', 'SMA600', 'SMA1200'].forEach(ma => {
+            if (Number.isFinite(cur[ma]) && Number.isFinite(cur.low) && cur.low <= cur[ma] && cur.close >= cur[ma]) {
+              allSignals.push({ dt: cur.dt, type: 'BUY', action: '買進（階梯支撐）', badge: 'alert0050-badge-buy', reason: '最低 ' + cur.low.toFixed(2) + ' 觸及 ' + ma + ' (' + cur[ma].toFixed(2) + ') 且收盤 ' + cur.close.toFixed(2) + ' 站上' });
+            }
+          });
+
+          // (2) 突破站回買點
+          if (prev) {
+            maKeys.forEach(ma => {
+              if (!Number.isFinite(cur[ma]) || !Number.isFinite(prev[ma])) return;
+              if (ma === 'SMA20' && bias240 <= 0.30) return;
+              if (prev.close < prev[ma] && cur.close >= cur[ma]) {
+                allSignals.push({ dt: cur.dt, type: 'BUY', action: '買進（突破站回）', badge: 'alert0050-badge-buy', reason: '收盤 ' + cur.close.toFixed(2) + ' 重新站回 ' + ma + ' (' + cur[ma].toFixed(2) + ')' });
+              }
+            });
+          }
+        }
+
+        updateAlert0050PerfTable(series, allSignals);
+
+        const top4 = allSignals.slice(-4).reverse();
+        if (top4.length) {
+          document.getElementById('a0050-rec-tbody').innerHTML = top4.map((s, idx) =>
+            '<tr>' +
+            '<td><strong>最近第 ' + (idx + 1) + ' 次</strong></td>' +
+            '<td><strong>' + s.dt + '</strong></td>' +
+            '<td><span class="alert0050-badge ' + s.badge + '">' + s.action + '</span></td>' +
+            '<td class="alert0050-reason">' + s.reason + '</td>' +
+            '</tr>'
+          ).join('');
+        }
+      }
+    })
+    .catch(() => { /* 若離線或權限限制，保留預設最新快照內容 */ });
+}
+
 function reloadAll() {
   loadMkt();
+  loadAlert0050();
   // loadStocks 完成後會自動依目前基準日重新計算延續率與總分。
   loadStocks();
 }
@@ -1782,6 +2327,7 @@ document.addEventListener('visibilitychange', function(){
 // 先顯示選舉策略標籤，不必等待貨幣市場 CSV 完成載入。
 document.getElementById('env-row').innerHTML = electionStrategyHTML();
 loadMkt();
+loadAlert0050();
 loadStocks();
 </script>
 </body>
