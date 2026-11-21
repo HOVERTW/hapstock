@@ -218,40 +218,32 @@ th.hist-col{background:rgba(232,150,10,.06);border-left:.5px dashed var(--border
 .alert0050-status-neutral{color:var(--text3)}
 .alert0050-reason{font-size:10.5px;color:var(--text2);white-space:normal;min-width:150px}
 @media(max-width:960px){.alert0050-grid{grid-template-columns:1fr}}
-/* 0050 區塊手機版：表格改為資訊卡，避免左右滑動 */
+/* 0050 區塊手機版：維持橫向表格並支援順暢左右滑動 */
 @media(max-width:600px){
- .alert0050{padding:14px 10px}
- .alert0050-head{align-items:flex-start;flex-direction:column;gap:7px}
- .alert0050-title-wrap{width:100%;gap:6px}
- .alert0050-title{font-size:14px}
- .alert0050-meta{font-size:10px}
+ .alert0050{padding:12px 14px}
  .alert0050-grid{grid-template-columns:minmax(0,1fr);gap:10px}
- .alert0050-box{padding:10px 9px;min-width:0}
- .alert0050-box-title{align-items:flex-start;flex-direction:column;font-size:11px;line-height:1.5}
- .alert0050-box-title span:last-child{font-size:10px!important}
- .alert0050-table-wrap{overflow:visible;border:0;background:transparent}
- .alert0050-table{display:block;width:100%;font-size:11px}
- .alert0050-table thead{display:none}
- .alert0050-table tbody{display:grid;gap:8px}
- .alert0050-table tbody tr{display:grid;grid-template-columns:1fr 1fr;gap:0;border:.5px solid var(--border);border-radius:8px;overflow:hidden;background:var(--bg)}
- .alert0050-table tbody td{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;min-width:0;padding:7px 8px;white-space:normal;text-align:right;border-bottom:.5px solid var(--border);font-size:11px;line-height:1.45}
- .alert0050-table tbody td:before{flex:0 0 auto;color:var(--text3);font-size:10px;text-align:left}
- .alert0050-table tbody td:last-child{border-bottom:0}
- .alert0050-table tbody td:nth-child(1):before{content:"均線週期"}
- .alert0050-table tbody td:nth-child(2):before{content:"最新均線"}
- .alert0050-table tbody td:nth-child(3):before{content:"賣出天數 N"}
- .alert0050-table tbody td:nth-child(4):before{content:"連續跌破"}
- .alert0050-table tbody td:nth-child(5){grid-column:1/-1;text-align:left;justify-content:flex-start}
- .alert0050-table tbody td:nth-child(5):before{content:"目前狀態："}
- .alert0050-table-wrap:has(#a0050-rec-tbody) .alert0050-table tbody tr{grid-template-columns:1fr 1fr}
- .alert0050-table-wrap:has(#a0050-rec-tbody) .alert0050-table tbody td:nth-child(1):before{content:"次序"}
- .alert0050-table-wrap:has(#a0050-rec-tbody) .alert0050-table tbody td:nth-child(2):before{content:"建議日期"}
- .alert0050-table-wrap:has(#a0050-rec-tbody) .alert0050-table tbody td:nth-child(3){grid-column:1/-1;text-align:left;justify-content:flex-start}
- .alert0050-table-wrap:has(#a0050-rec-tbody) .alert0050-table tbody td:nth-child(3):before{content:"建議操作："}
- .alert0050-table-wrap:has(#a0050-rec-tbody) .alert0050-table tbody td:nth-child(4){grid-column:1/-1;display:block;text-align:left}
- .alert0050-table-wrap:has(#a0050-rec-tbody) .alert0050-table tbody td:nth-child(4):before{content:"觸發依據";display:block;margin-bottom:3px}
- .alert0050-reason{min-width:0;font-size:10.5px}
- .alert0050-badge{font-size:10px;padding:3px 7px}
+ .alert0050-box{min-width:0;overflow:hidden;padding:10px}
+ .alert0050-box-title{flex-wrap:wrap;gap:4px}
+ .alert0050-table-wrap{
+   width:100%;
+   max-width:100%;
+   overflow-x:auto;
+   -webkit-overflow-scrolling:touch;
+ }
+ .alert0050-table{
+   width:max-content;
+   min-width:100%;
+   border-collapse:collapse;
+ }
+ .alert0050-table th,
+ .alert0050-table td{
+   white-space:nowrap;
+   padding:7px 10px;
+ }
+ .alert0050-reason{
+   white-space:nowrap;
+   min-width:auto;
+ }
 }
 
 
