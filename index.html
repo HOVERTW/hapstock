@@ -44,6 +44,38 @@ button:hover{background:var(--bg2)}
 .etag-gray{background:var(--bg2);color:var(--text2)}
 
 .etag-election{background:rgba(124,92,191,.13);color:#8057b7;border:1px solid rgba(124,92,191,.35);cursor:help;display:inline-flex;align-items:center;gap:5px;outline:none}
+/* 大選策略右側的融資／恐貪訊號連結 */
+.signal-link{position:relative;display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:12px;border:1px solid var(--border2);font-size:11px;font-weight:600;text-decoration:none;white-space:normal;line-height:1.45;transition:background .15s,border-color .15s}
+.signal-link:hover,.signal-link:focus{filter:brightness(.96);outline:2px solid var(--blue);outline-offset:1px}
+.signal-link.no-buy{background:rgba(216,90,48,.10);color:var(--red);border-color:rgba(216,90,48,.35)}
+.signal-link.buy{background:rgba(29,158,117,.09);color:var(--green);border-color:rgba(29,158,117,.32)}
+.signal-link .link-hint{font-size:9px;font-weight:400;opacity:.8}
+.env-row{align-items:center}
+@media(max-width:768px){
+ body{font-size:14px;overflow-x:hidden}
+ .shell{width:100%;max-width:100%;border:0}
+ .topbar{padding:12px 14px;align-items:flex-start}
+ .brand{font-size:16px}
+ .mkt,.persistence{padding:12px 14px}
+ .env-row{gap:7px}
+ .env-row .etag,.env-row .signal-link{min-height:34px;padding:6px 10px;align-items:center}
+ .sig-row{gap:6px}
+ .sig{padding:9px 10px;min-width:0}
+ .sig-val{font-size:15px;overflow-wrap:anywhere}
+ .info-pop.election-info-pop,.info-pop.alert0050-pop{position:fixed!important;left:8px!important;right:8px!important;top:8px!important;bottom:8px!important;width:auto!important;max-width:none!important;max-height:none!important;padding:12px!important;overflow:auto;-webkit-overflow-scrolling:touch}
+ .election-table-wrap,.alert0050-table-wrap{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+ table{font-size:11px}
+ .topbar button,button{min-height:36px}
+}
+@media(max-width:520px){
+ .election-summary{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .env-row{display:flex;align-items:stretch}
+ .env-row .signal-link{flex:1 1 calc(50% - 7px);justify-content:space-between;min-width:0}
+ .env-row .etag-election{flex:1 1 100%;justify-content:center}
+ .info-pop.election-info-pop{padding:10px!important}
+ .election-info-table{min-width:620px}
+}
+
 .etag-election:hover,.etag-election:focus{background:rgba(124,92,191,.22);border-color:#8057b7}
 .etag-election .election-mark{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border:1px solid currentColor;border-radius:50%;font-size:9px;line-height:1;font-weight:700}
 .info-pop.election-info-pop{width:min(760px,calc(100vw - 24px));max-width:none;max-height:min(72vh,680px);overflow:auto;padding:14px 16px}
@@ -621,6 +653,28 @@ function fv(row, keys) {
   return '';
 }
 
+// ── 融資維持率與恐貪指數策略連結 ──
+function signalStrategyHTML() {
+  const marginUrl = 'https://www.macromicro.me/charts/53117/taiwan-taiex-maintenance-margin';
+  const fearUrl = 'https://www.macromicro.me/collections/34/us-stock-relative/50108/cnn-fear-and-greed';
+  return `
+    <a class="signal-link no-buy" href="${marginUrl}" target="_blank" rel="noopener noreferrer"
+       title="禁買區：融資維持率 148%～158%
+點擊開啟 MacroMicro 融資維持率圖表" aria-label="禁買區，融資維持率148%至158%，開啟融資維持率圖表">
+      禁買區｜融資維持率 148%～158% <span class="link-hint">↗</span>
+    </a>
+    <a class="signal-link buy" href="${marginUrl}" target="_blank" rel="noopener noreferrer"
+       title="做多訊號：融資維持率升穿 148%
+點擊開啟 MacroMicro 融資維持率圖表" aria-label="做多，融資維持率升穿148%，開啟融資維持率圖表">
+      做多｜融資維持率升穿 148% <span class="link-hint">↗</span>
+    </a>
+    <a class="signal-link buy" href="${fearUrl}" target="_blank" rel="noopener noreferrer"
+       title="做多訊號：恐貪指數升穿 15
+點擊開啟 MacroMicro CNN 恐懼與貪婪指數" aria-label="做多，恐貪指數升穿15，開啟恐貪指數圖表">
+      做多｜恐貪指數升穿 15 <span class="link-hint">↗</span>
+    </a>`;
+}
+
 // ── 美國總統／期中選舉投資策略（依使用者提供的回測截圖文字化）──
 function electionStrategyHTML() {
   return `
@@ -755,7 +809,7 @@ function loadMkt() {
       });
       document.getElementById('env-row').innerHTML = tags
         .map(t => '<span class="etag ' + t.cls + '">' + t.t + '</span>').join('')
-        + electionStrategyHTML();
+        + electionStrategyHTML() + signalStrategyHTML();
     })
     .catch(() => renderMktFallback());
 }
@@ -765,7 +819,7 @@ function renderMktFallback() {
     const v = document.getElementById('blk-' + i + '-val');
     if (v) v.textContent = '無法讀取';
   }
-  document.getElementById('env-row').innerHTML = '<span class="etag etag-gray">貨幣市場表讀取失敗</span>' + electionStrategyHTML();
+  document.getElementById('env-row').innerHTML = '<span class="etag etag-gray">貨幣市場表讀取失敗</span>' + electionStrategyHTML() + signalStrategyHTML();
 }
 
 // ── 產業資料 ──
