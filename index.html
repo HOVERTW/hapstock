@@ -687,14 +687,14 @@ function signalStrategyHTML() {
   const fearUrl = 'https://www.macromicro.me/collections/34/us-stock-relative/50108/cnn-fear-and-greed';
   return `
     <a class="signal-link no-buy" href="${marginUrl}" target="_blank" rel="noopener noreferrer"
-       title="禁買區：融資維持率 148%～158%
-點擊開啟 MacroMicro 融資維持率圖表" aria-label="禁買區，融資維持率148%至158%，開啟融資維持率圖表">
-      禁買區｜融資維持率 148%～158% <span class="link-hint">↗</span>
+       title="禁買區：融資維持率 140%～150%
+點擊開啟 MacroMicro 融資維持率圖表" aria-label="禁買區，融資維持率140%至150%，開啟融資維持率圖表">
+      禁買區｜融資維持率 140%～150% <span class="link-hint">↗</span>
     </a>
     <a class="signal-link buy" href="${marginUrl}" target="_blank" rel="noopener noreferrer"
-       title="做多訊號：融資維持率升穿 148%
-點擊開啟 MacroMicro 融資維持率圖表" aria-label="做多，融資維持率升穿148%，開啟融資維持率圖表">
-      做多｜融資維持率升穿 148% <span class="link-hint">↗</span>
+       title="做多訊號：融資維持率升穿 140%
+點擊開啟 MacroMicro 融資維持率圖表" aria-label="做多，融資維持率升穿140%，開啟融資維持率圖表">
+      做多｜融資維持率升穿 140% <span class="link-hint">↗</span>
     </a>
     <a class="signal-link buy" href="${fearUrl}" target="_blank" rel="noopener noreferrer"
        title="做多訊號：恐貪指數升穿 15
@@ -2245,7 +2245,7 @@ function loadAlert0050() {
         }
       }
 
-      // 2. 自動尋找右側歷史還原股價表頭（尋找包含「日期」與「收盤價」的那一列）
+      // 2. 自動尋找右側歷史還原股價表頭
       let hdrRowIdx = -1;
       const ci = {};
       for (let r = 0; r < Math.min(rows.length, 15); r++) {
@@ -2397,7 +2397,7 @@ function loadAlert0050() {
         }
       }
     })
-    .catch(() => {});
+    .catch(() => { /* 若離線或權限限制，保留預設最新快照內容 */ });
 }
 
 function reloadAll() {
