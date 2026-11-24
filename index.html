@@ -2220,35 +2220,64 @@ function loadAlert0050() {
   fetch(ALERT0050_CSV, { cache: 'no-store' })
     .then(r => r.text())
     .then(text => {
+      if (text.includes('<html') || text.includes('<!DOCTYPE html')) return;
       const parsed = Papa.parse(text, { header: false, skipEmptyLines: false });
       const rows = parsed.data || [];
-      if (rows.length < 11) return;
+      if (rows.length < 10) return;
 
-      // 左半部分重點資訊（第 2、3 列）
-      const latestPx = String((rows[1] && rows[1][1]) || '').trim();
-      const updatedTime = String((rows[2] && rows[2][1]) || '').trim();
-      if (latestPx) document.getElementById('a0050-latest-px').textContent = latestPx;
-      if (updatedTime) document.getElementById('a0050-updated').textContent = updatedTime;
+      // 1. 自動尋找左側重點資訊與均線監控列
+      const leftMaRows = [];
+      for (let r = 0; r < rows.length; r++) {
+        const row = rows[r] || [];
+        const colA = String(row[0] || '').trim();
+        const colB = String(row[1] || '').trim();
+        if (colA === '最新交易日 / 收盤價' && colB) {
+          document.getElementById('a0050-latest-px').textContent = colB;
+        } else if (colA === '最後更新時間' && colB) {
+          document.getElementById('a0050-updated').textContent = colB;
+        } else if (/^SMA(20|120|240|600|1200)$/.test(colA)) {
+          leftMaRows.push({
+            period: colA,
+            val: colB,
+            trigN: parseInt(String(row[2] || '').trim(), 10) || 0,
+            curBreak: parseInt(String(row[3] || '').trim(), 10) || 0
+          });
+        }
+      }
 
-      // 解析右側歷史還原股價與均線資料（從第 11 列起，索引 10）
-      const hdr = rows[9] || [];
+      // 2. 自動尋找右側歷史還原股價表頭（尋找包含「日期」與「收盤價」的那一列）
+      let hdrRowIdx = -1;
       const ci = {};
-      hdr.forEach((h, idx) => { const k = String(h || '').trim(); if (k) ci[k] = idx; });
+      for (let r = 0; r < Math.min(rows.length, 15); r++) {
+        const row = rows[r] || [];
+        const tempCi = {};
+        row.forEach((h, idx) => {
+          const k = String(h || '').trim();
+          if (k) tempCi[k] = idx;
+        });
+        if (tempCi['日期'] !== undefined && tempCi['收盤價'] !== undefined) {
+          hdrRowIdx = r;
+          Object.assign(ci, tempCi);
+          break;
+        }
+      }
+      if (hdrRowIdx === -1) return;
+
       const colIdx = (name, fallback) => ci[name] !== undefined ? ci[name] : fallback;
-      const iDate = colIdx('日期', 0);
-      const iLow  = colIdx('最低價', 3);
-      const iCls  = colIdx('收盤價', 4);
+      const iDate = colIdx('日期', 5);
+      const iLow  = colIdx('最低價', 8);
+      const iCls  = colIdx('收盤價', 9);
       const maKeys = ['SMA20', 'SMA120', 'SMA240', 'SMA600', 'SMA1200'];
       const maIdx = {
-        SMA20: colIdx('SMA20', 5),
-        SMA120: colIdx('SMA120', 6),
-        SMA240: colIdx('SMA240', 7),
-        SMA600: colIdx('SMA600', 8),
-        SMA1200: colIdx('SMA1200', 9)
+        SMA20: colIdx('SMA20', 10),
+        SMA120: colIdx('SMA120', 11),
+        SMA240: colIdx('SMA240', 12),
+        SMA600: colIdx('SMA600', 13),
+        SMA1200: colIdx('SMA1200', 14)
       };
 
       const series = [];
-      for (let r = 10; r < rows.length; r++) {
+      for (let r = hdrRowIdx + 1; r < rows.length; r++) {
         const row = rows[r];
         if (!row) continue;
         const dt = String(row[iDate] || '').trim();
@@ -2262,17 +2291,6 @@ function loadAlert0050() {
           item[k] = Number.isFinite(v) ? v : NaN;
         });
         series.push(item);
-      }
-
-      // 左側均線監控列（第 5~9 列，索引 4~8）
-      const leftMaRows = [];
-      for (let r = 4; r <= 8; r++) {
-        const row = rows[r] || [];
-        const period = String(row[0] || '').trim();
-        const val = String(row[1] || '').trim();
-        const trigN = parseInt(String(row[2] || '').trim(), 10) || 0;
-        const curBreak = parseInt(String(row[3] || '').trim(), 10) || 0;
-        if (period) leftMaRows.push({ period, val, trigN, curBreak });
       }
 
       let latestBias240 = null;
@@ -2321,7 +2339,6 @@ function loadAlert0050() {
         }).join('');
       }
 
-      // 依規則回推歷史訊號（排除賣前預警，僅保留賣出與買進）並取近 4 次建議操作與日期
       if (series.length) {
         const nMap = { SMA20: 3, SMA120: 9, SMA240: 2, SMA600: 3, SMA1200: 2 };
         leftMaRows.forEach(m => { if (nMap[m.period] !== undefined && m.trigN > 0) nMap[m.period] = m.trigN; });
@@ -2348,14 +2365,12 @@ function loadAlert0050() {
             }
           });
 
-          // (1) 階梯支撐買點
           ['SMA120', 'SMA240', 'SMA600', 'SMA1200'].forEach(ma => {
             if (Number.isFinite(cur[ma]) && Number.isFinite(cur.low) && cur.low <= cur[ma] && cur.close >= cur[ma]) {
               allSignals.push({ dt: cur.dt, type: 'BUY', action: '買進（階梯支撐）', badge: 'alert0050-badge-buy', reason: '最低 ' + cur.low.toFixed(2) + ' 觸及 ' + ma + ' (' + cur[ma].toFixed(2) + ') 且收盤 ' + cur.close.toFixed(2) + ' 站上' });
             }
           });
 
-          // (2) 突破站回買點
           if (prev) {
             maKeys.forEach(ma => {
               if (!Number.isFinite(cur[ma]) || !Number.isFinite(prev[ma])) return;
@@ -2382,7 +2397,7 @@ function loadAlert0050() {
         }
       }
     })
-    .catch(() => { /* 若離線或權限限制，保留預設最新快照內容 */ });
+    .catch(() => {});
 }
 
 function reloadAll() {
